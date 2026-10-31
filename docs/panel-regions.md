@@ -4,7 +4,7 @@
 
 <div align="justify">
 
-&emsp;&emsp;The panel region of each band can be checked, accepted and, when it is wrong or the QR code cannot be read, drawn with the panel regions tool (`radiometric_app/panel_selector.py`). Open it with "Check / draw panel regions..." on the Reference panel page, or with `launchers/open_panel_selector.cmd` (`python -m radiometric_app.panel_selector --config config/radiometric_inputs.json --root <folder>`). The tool reads the panel captures chosen on the Inputs page, so "Check inputs" (next to the button) checks the folders, the panel capture and the bands first, and the tool does not open while there are problems. The file of the regions (`PANEL.manual_regions_file`, by default `panel_regions.json` in the results folder) does not have to exist yet: "Save and close" creates it, but a run needs it to exist.
+The panel region of each band can be checked, accepted and, when it is wrong or the QR code cannot be read, drawn with the panel regions tool (`radiometric_app/panel_selector.py`). Open it with "Check / draw panel regions..." on the Reference panel page, or with `launchers/open_panel_selector.cmd` (`python -m radiometric_app.panel_selector --config config/radiometric_inputs.json --root <folder>`). The tool reads the panel captures chosen on the Inputs page, so "Check inputs" (next to the button) checks the folders, the panel capture and the bands first, and the tool does not open while there are problems. The file of the regions (`PANEL.manual_regions_file`, by default `panel_regions.json` in the results folder) does not have to exist yet: "Save and close" creates it, but a run needs it to exist.
 
 ![The tool, with the region of the Blue band of the panel capture accepted](screenshots/panel_regions.png)
 

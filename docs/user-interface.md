@@ -4,21 +4,21 @@
 
 <div align="justify">
 
-&emsp;&emsp;The UI is the application that sets up and runs the correction without writing code (the alternatives are the [workflow runner and the Python library](python-and-command-line.md)). It has four pages, chosen with the tiles on the left, a help column on the right and a bottom bar with the saved settings. Open it with `open_radiometric_window.cmd` (see [Installing and launching](installation.md#launchers-windows)) or, from the project folder:
+The UI is the application that sets up and runs the correction without writing code (the alternatives are the [workflow runner and the Python library](python-and-command-line.md)). It has four pages, chosen with the tiles on the left, a help column on the right and a bottom bar with the saved settings. Open it with `open_radiometric_window.cmd` (see [Installing and launching](installation.md#launchers-windows)) or, from the project folder:
 
 ```
 python -m radiometric_app.radiometric_window [--config config/radiometric_inputs.json] [--root <folder>]
 ```
 
-&emsp;&emsp;The pictures below were taken on the example images, with the DLS on.
+The pictures below were taken on the example images, with the DLS on.
 
 ## Layout
 
-&emsp;&emsp;The tiles on the left choose the page (Inputs, Reference panel, DLS, Run and results). The input fields in the center are the parameters that can be typed or selected, and the help column on the right explains the field under the pointer or with the keyboard focus. The column also shows information that depends on your data (for example, how the file name pattern reads the images folder or what the spectral file gives in each band), and a problem with a field (a pattern that matches nothing, a capture that is not in the folder) is written in red under it, only while it is wrong. The divider between the fields and the column can be dragged.
+The tiles on the left choose the page (Inputs, Reference panel, DLS, Run and results). The input fields in the center are the parameters that can be typed or selected, and the help column on the right explains the field under the pointer or with the keyboard focus. The column also shows information that depends on your data (for example, how the file name pattern reads the images folder or what the spectral file gives in each band), and a problem with a field (a pattern that matches nothing, a capture that is not in the folder) is written in red under it, only while it is wrong. The divider between the fields and the column can be dragged.
 
 ## Page 1: Inputs
 
-&emsp;&emsp;Where the images are, which captures show the reference panel and which captures are corrected.
+Where the images are, which captures show the reference panel and which captures are corrected.
 
 ![The Inputs page](screenshots/window_inputs.png)
 
@@ -34,7 +34,7 @@ python -m radiometric_app.radiometric_window [--config config/radiometric_inputs
 
 ## Page 2: Reference panel
 
-&emsp;&emsp;The bands of the camera, the known reflectance of the reference panel and how the panel is measured in its image.
+The bands of the camera, the known reflectance of the reference panel and how the panel is measured in its image.
 
 ![The Reference panel page](screenshots/window_reference_panel.png)
 
@@ -45,7 +45,7 @@ python -m radiometric_app.radiometric_window [--config config/radiometric_inputs
 
 ## Page 3: DLS
 
-&emsp;&emsp;The correction with the DLS, which is optional, and the limits of the checks of its data and of the geometry of the acquisition.
+The correction with the DLS, which is optional, and the limits of the checks of its data and of the geometry of the acquisition.
 
 ![The DLS page, with the help of the field that has the focus](screenshots/window_dls.png)
 
@@ -55,7 +55,7 @@ python -m radiometric_app.radiometric_window [--config config/radiometric_inputs
 
 ## Page 4: Run and results
 
-&emsp;&emsp;The last page runs the workflow in the background, so the UI stays responsive.
+The last page runs the workflow in the background, so the UI stays responsive.
 
 ![The Run and results page after a run with the DLS](screenshots/window_run.png)
 
@@ -66,7 +66,7 @@ python -m radiometric_app.radiometric_window [--config config/radiometric_inputs
 
 ## Saved settings and where things are saved
 
-&emsp;&emsp;The bottom bar is the same on every page. It has three buttons ("Load profile...", "Save profile..." and "Update saved configuration") and, at the left, the configuration file in use.
+The bottom bar is the same on every page. It has three buttons ("Load profile...", "Save profile..." and "Update saved configuration") and, at the left, the configuration file in use.
 
 - **Configuration** (`config/radiometric_inputs.json`, or the file given with `--config`): the values that differ from the defaults. "Update saved configuration" and "Run" write it, so it is what was used in the last run, and the UI opens with it the next time.
 - **Profiles** (`config/profiles/*.json`): "Save profile..." writes every value of the UI to a file (in `config/profiles` or anywhere else) and "Load profile..." replaces all the values with those of a file. A profile is complete, so it is the safer way to keep a setup for a camera or a flight. "Load profile..." also reads the `radiometric_result.json` or the provenance file of a past run, which brings back the settings of that run (the results folder is then that of the run, which the status line says: check it before running again). The command line takes them as well: `--config <results folder>/radiometric_result.json` repeats a run.

@@ -4,11 +4,11 @@
 
 <div align="justify">
 
-&emsp;&emsp;The processing needs the images, the reference panel and the metadata of the images, which is read with [ExifTool](https://exiftool.org/), so the field labels written by the camera must be kept.
+The processing needs the images, the reference panel and the metadata of the images, which is read with [ExifTool](https://exiftool.org/), so the field labels written by the camera must be kept.
 
 ## Example: raw images to reflectance with the Python library
 
-&emsp;&emsp;The example below processes the example images in this repository (`images/raw`): the capture `IMG_0005` shows the reference panel and `IMG_0010` is the capture to be corrected. First, import the required libraries and the module.
+The example below processes the example images in this repository (`images/raw`): the capture `IMG_0005` shows the reference panel and `IMG_0010` is the capture to be corrected. First, import the required libraries and the module.
 
 ```
 # Standard library imports
@@ -30,7 +30,7 @@ import radiometric_correction_tools as rct
 exiftool_path = os.environ.get('exiftoolpath')
 ```
 
-&emsp;&emsp;Next, provide the information required for processing: (i) the names of the captures with the reference panel and with the images to be transformed from raw Digital Numbers (DNs) to reflectance, (ii) the reflectance levels of the different bands in the reference panel, a value provided by MicaSense with each reference panel, and (iii) whether the DLS should be used. The files of each capture are matched to the bands using the band name written in their metadata (`XMP:BandName`), not the order of the files: in the example images the file `_3` is the Red band and `_6` is the Panchro band. Each result keeps the name of its source file, so `IMG_0010_3.tif` is the Red band both before and after the correction.
+Next, provide the information required for processing: (i) the names of the captures with the reference panel and with the images to be transformed from raw Digital Numbers (DNs) to reflectance, (ii) the reflectance levels of the different bands in the reference panel, a value provided by MicaSense with each reference panel, and (iii) whether the DLS should be used. The files of each capture are matched to the bands using the band name written in their metadata (`XMP:BandName`), not the order of the files: in the example images the file `_3` is the Red band and `_6` is the Panchro band. Each result keeps the name of its source file, so `IMG_0010_3.tif` is the Red band both before and after the correction.
 
 ```
 # Name of the captures: the reference panel and the images to be corrected
@@ -56,7 +56,7 @@ image_files = rct.read_band_files( rct.find_capture_paths(root_path / images_fol
                                    expected_bands=bands, exiftool_path=exiftool_path )
 ```
 
-&emsp;&emsp;Finally, iterate over the bands, saving the images after transforming them from DNs to radiance and then to reflectance.
+Finally, iterate over the bands, saving the images after transforming them from DNs to radiance and then to reflectance.
 
 ```
 # Images of both captures (the panel is detected inside the loop)
@@ -105,7 +105,7 @@ rct.write_provenance( root_path / results_folder / (image_to_process_name + '_pr
                       checks=checks )
 ```
 
-&emsp;&emsp;In summary, `rct.Image(image, metadata)` creates an object with the image and its information; `detect_reference_panel(...)` finds the reference panel on the undistorted radiance image and calculates the factor that converts radiance to reflectance; `rct.combine_panels(...)` gives the factor applied to the image (with the DLS, the panel factor times the DLS ratio; with two panels, their weighted mean); and `digital_numbers_to_reflectance(factor)` transforms the target image to radiance and multiplies it by that factor. `rct.find_capture_paths()` and `rct.read_band_files()` list the files of a capture and match them to the bands.
+In summary, `rct.Image(image, metadata)` creates an object with the image and its information; `detect_reference_panel(...)` finds the reference panel on the undistorted radiance image and calculates the factor that converts radiance to reflectance; `rct.combine_panels(...)` gives the factor applied to the image (with the DLS, the panel factor times the DLS ratio; with two panels, their weighted mean); and `digital_numbers_to_reflectance(factor)` transforms the target image to radiance and multiplies it by that factor. `rct.find_capture_paths()` and `rct.read_band_files()` list the files of a capture and match them to the bands.
 
 ## Checks and calibration record
 
@@ -115,7 +115,7 @@ rct.write_provenance( root_path / results_folder / (image_to_process_name + '_pr
 
 ## Workflow runner (no user interface)
 
-&emsp;&emsp;`radiometric_app/radiometric_workflow.py` runs the whole example above, for all the captures of a folder, from a configuration with fixed keys. It has no user interface (the UI is built on top of it, from `FIELDS`, which describes each key: default, kind of value, label and description).
+`radiometric_app/radiometric_workflow.py` runs the whole example above, for all the captures of a folder, from a configuration with fixed keys. It has no user interface (the UI is built on top of it, from `FIELDS`, which describes each key: default, kind of value, label and description).
 
 ```
 python -m radiometric_app.radiometric_workflow --write-default-config config/radiometric_inputs.json   # write the defaults, then edit them

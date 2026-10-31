@@ -6,9 +6,9 @@
 
 ## What the DLS correction does
 
-&emsp;&emsp;The panel capture calibrates the camera for the light of that moment. If the light changes between the panel capture and an image (a cloud, the height of the sun), the reflectance of the image is wrong by the same proportion. The DLS (downwelling light sensor) records the light during every capture and so shows how it changed. It does not measure the irradiance on a horizontal surface directly: it measures the light at its own sensor and estimates the horizontal irradiance (`XMP:HorizontalIrradiance`, one value per band) from those readings, which is why a tilted or shaded DLS gives a worse estimate (see [Checks of the DLS data](#checks-of-the-dls-data)).
+The panel capture calibrates the camera for the light of that moment. If the light changes between the panel capture and an image (a cloud, the height of the sun), the reflectance of the image is wrong by the same proportion. The DLS (downwelling light sensor) records the light during every capture and so shows how it changed. It does not measure the irradiance on a horizontal surface directly: it measures the light at its own sensor and estimates the horizontal irradiance (`XMP:HorizontalIrradiance`, one value per band) from those readings, which is why a tilted or shaded DLS gives a worse estimate (see [Checks of the DLS data](#checks-of-the-dls-data)).
 
-&emsp;&emsp;The DLS ratio of a band is `E_panel / E_image`: the irradiance estimated at the panel capture divided by the one estimated at the image capture. An image taken in more light than the panel (ratio below 1) would look too bright, and multiplying by the ratio corrects it. A ratio of 0.885 means that the DLS estimated 13 % more light at the image than at the panel, so the reflectance is lowered by 11.5 %. The ratio is 1 at the panel capture. With `CORRECTION.use_dls` on, the reflectance of each image is:
+The DLS ratio of a band is `E_panel / E_image`: the irradiance estimated at the panel capture divided by the one estimated at the image capture. An image taken in more light than the panel (ratio below 1) would look too bright, and multiplying by the ratio corrects it. A ratio of 0.885 means that the DLS estimated 13 % more light at the image than at the panel, so the reflectance is lowered by 11.5 %. The ratio is 1 at the panel capture. With `CORRECTION.use_dls` on, the reflectance of each image is:
 
 ```
 reflectance(image) = radiance(image) * panel_reflectance / panel_radiance * E_panel / E_image
@@ -22,7 +22,7 @@ reflectance(image) = radiance(image) * panel_reflectance / panel_radiance * E_pa
 
 ## Checks of the DLS data
 
-&emsp;&emsp;The limits are in `rct.DLS_CHECKS`; they are first guesses, not validated values, so adjust them to your data. Each check issues a `RuntimeWarning` and the messages are saved in the provenance record. The checks only raise flags; they never change a result.
+The limits are in `rct.DLS_CHECKS`; they are first guesses, not validated values, so adjust them to your data. Each check issues a `RuntimeWarning` and the messages are saved in the provenance record. The checks only raise flags; they never change a result.
 
 - `rct.check_dls_capture(panel_images, images)`, for one capture. With two panel captures, the workflow compares each image with the panel that weighs most in its calibration (the first one when both weigh the same) and records its name (`compared_with_panel`):
   - the DLS ratio of every band must be within 3 % of the median of the bands (the light changes all the bands together);
@@ -35,7 +35,7 @@ reflectance(image) = radiance(image) * panel_reflectance / panel_radiance * E_pa
 
 ## Geometry of the acquisition
 
-&emsp;&emsp;How the camera was pointed in each capture. The limits are in `rct.GEOMETRY_CHECKS` and in the configuration (`CHECKS.max_camera_tilt_deg`, `CHECKS.panel_heading_tolerance_deg`, `CHECKS.image_heading_tolerance_deg` and `CHECKS.heading_offset_deg`); they are first guesses. They only raise flags (`RuntimeWarning`), never change the result, and what is missing in the metadata is reported as unavailable instead of failing.
+How the camera was pointed in each capture. The limits are in `rct.GEOMETRY_CHECKS` and in the configuration (`CHECKS.max_camera_tilt_deg`, `CHECKS.panel_heading_tolerance_deg`, `CHECKS.image_heading_tolerance_deg` and `CHECKS.heading_offset_deg`); they are first guesses. They only raise flags (`RuntimeWarning`), never change the result, and what is missing in the metadata is reported as unavailable instead of failing.
 
 - **Camera tilt** (`rct.camera_tilt_deg()`): the angle between the optical axis of the camera and the vertical, from `XMP:Roll` and `XMP:Pitch`. Limit: 5 degrees, for the panel capture and for each image capture.
 - **Heading and the sun** (`rct.heading_to_sun_deg()`): the angle between the heading of the camera (`XMP:Yaw` plus `CHECKS.heading_offset_deg`, the direction of the top of the image) and the direction of the sun (`XMP:SolarAzimuth`), from 0 to 180 degrees without a side: 0 is facing the sun, 90 the sun at the side, 180 the back to the sun. The panel is expected close to 0 or to 180 (within 30 degrees) and the images to correct close to 90 (within 30 degrees). `XMP:SolarAzimuth` was checked against the position of the sun calculated from the GPS position and the time of the example (the time written by the camera is UTC); whether `XMP:Yaw` is referred to true or to magnetic north is not known, which is what the offset is for.
@@ -45,7 +45,7 @@ reflectance(image) = radiance(image) * panel_reflectance / panel_radiance * E_pa
 
 ## The flags of a run are counted by criterion
 
-&emsp;&emsp;A criterion that fails in many captures is written once, with how many captures failed and which ones, not once per capture. In the example flight (409 captures; only a few of its captures are in `images/raw`, the complete flight is not included) the line is, for instance:
+A criterion that fails in many captures is written once, with how many captures failed and which ones, not once per capture. In the example flight (409 captures; only a few of its captures are in `images/raw`, the complete flight is not included) the line is, for instance:
 
 ```
 DLS tilt over 10 deg in 386 of 409 captures (tilt of at least 10.1 to 22.0 deg): IMG_0010 to IMG_0044, IMG_0047, IMG_0050 to IMG_0100, ...
@@ -57,6 +57,6 @@ DLS tilt over 10 deg in 386 of 409 captures (tilt of at least 10.1 to 22.0 deg):
 
 ## The summary at the end of a run
 
-&emsp;&emsp;At the end of the log, and in the command line output, the run says what it found over the whole run: how many captures were corrected, the geometry and the DLS of the panel captures and, over the corrected captures, the minimum, median and maximum of the tilt of the camera, the angle between its heading and the sun, the elevation of the sun, the tilt of the DLS and the DLS ratio, each with how many captures are outside the limits, and how many spikes or steps of the irradiance were found. The numbers are also in the `summary` of `radiometric_result.json`.
+At the end of the log, and in the command line output, the run says what it found over the whole run: how many captures were corrected, the geometry and the DLS of the panel captures and, over the corrected captures, the minimum, median and maximum of the tilt of the camera, the angle between its heading and the sun, the elevation of the sun, the tilt of the DLS and the DLS ratio, each with how many captures are outside the limits, and how many spikes or steps of the irradiance were found. The numbers are also in the `summary` of `radiometric_result.json`.
 
 </div>
