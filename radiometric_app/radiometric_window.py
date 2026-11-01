@@ -1346,8 +1346,10 @@ class RadiometricFrame:
                  "that moment to compare it with." for row in rows if row['alone']]
         other = [flag for flag in flags if not flag.startswith('Panel capture ')]
         if alone or other:
-            ttk.Label(frame, text='\n'.join(alone + other), style='Muted.TLabel', wraplength=900, justify='left').pack(
-                anchor='w', pady=(6, 0))
+            notes = ttk.Label(frame, text='\n'.join(alone + other), style='Muted.TLabel', wraplength=900, justify='left')
+            notes.pack(anchor='w', fill='x', pady=(6, 0))
+            # a note takes one line while the window is wide enough for it
+            frame.bind('<Configure>', lambda event: notes.configure(wraplength=max(300, event.width - 28)), add='+')
         line = ttk.Frame(frame)
         line.pack(fill='x', pady=(8, 0))
 
