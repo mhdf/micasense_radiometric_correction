@@ -16,7 +16,7 @@ _config.yml                       the website of the documentation (GitHub Pages
 launchers/                        launchers for Windows (double-click), the choice of the Python and the check of the computer
 config/                           your configuration, profiles, presets and chosen Python (not kept in git)
 requirements.txt, environment.yml the Python packages (pip) and the conda environment (see docs/installation.md)
-open_radiometric_window.cmd       double-click to open the UI (the other launchers are in launchers/)
+open_radiometric_ui.cmd           double-click to open the UI (the other launchers are in launchers/)
 images/raw/                       the example images: IMG_0003, IMG_0005 and IMG_0009 show the reference panel before the flight, IMG_0422 and IMG_0423 after it, IMG_0010 is the capture to correct
 reference_panel_spectral_response/ the spectral response (reflectance by wavelength) of the panel of the example
 results/                          what the program writes (not kept in git)
@@ -41,5 +41,7 @@ python -m unittest discover -s tests -t . -v
 ```
 
 The tests use the example images and need ExifTool (set the environment variable `exiftoolpath` if it is not in the PATH). The tests of the UI need a display and are skipped without one. `tests/test_readme.py` checks the documentation: the contents list of the README has every section in order, every link of the README and of the pages of `docs` reaches an existing file and heading, and the images exist.
+
+GitHub runs the same tests for every push to `main` and every pull request (`.github/workflows/tests.yml`), on Windows with Python 3.10 and 3.12, after installing ExifTool, the Visual C++ 2013 runtime and the packages of `requirements.txt`. The result is shown in the Actions tab of the repository and on each pull request.
 
 </div>

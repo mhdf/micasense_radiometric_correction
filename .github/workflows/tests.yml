@@ -1,0 +1,37 @@
+# Runs the tests on GitHub (Windows, the system the program is made for) for every push to main and every pull request.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: windows-latest
+    strategy:
+      # --- run every Python version even when one fails
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # ExifTool reads the metadata of the images; the QR code reader (pyzbar) needs the Visual C++ 2013 runtime
+      - name: Install ExifTool and the Visual C++ 2013 runtime
+        run: choco install exiftool vcredist2013 -y --no-progress
+
+      - name: Install the Python packages
+        run: python -m pip install -r requirements.txt
+
+      - name: Run the tests
+        env:
+          MPLBACKEND: Agg
+        run: |
+          exiftool -ver
+          python -m unittest discover -s tests -t . -v

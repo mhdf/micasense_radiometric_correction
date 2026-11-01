@@ -4,7 +4,7 @@
 
 <div align="justify">
 
-The UI is the application that sets up and runs the correction without writing code (the alternatives are the [workflow runner and the Python library](python-and-command-line.md)). It has four pages, chosen with the tiles on the left, a help column on the right and a bottom bar with the saved settings. Open it with `open_radiometric_window.cmd` (see [Installing and launching](installation.md#launchers-windows)) or, from the project folder:
+The UI is the application that sets up and runs the correction without writing code (the alternatives are the [workflow runner and the Python library](python-and-command-line.md)). It has four pages, chosen with the tiles on the left, a help column on the right and a bottom bar with the saved settings. Open it with `open_radiometric_ui.cmd` (see [Installing and launching](installation.md#launchers-windows)) or, from the project folder:
 
 ```
 python -m radiometric_app.radiometric_window [--config config/radiometric_inputs.json] [--root <folder>]

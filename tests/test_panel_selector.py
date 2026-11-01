@@ -14,6 +14,7 @@ from types import SimpleNamespace
 
 import radiometric_correction_tools as rct
 from radiometric_app import panel_selector as ps
+from tests import require_window_size
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / 'images' / 'raw'
@@ -1009,6 +1010,7 @@ class WindowTests(PanelImagesMixin, unittest.TestCase):
         window = self.window
         self.root.attributes('-alpha', 0.0)
         self.root.deiconify()
+        require_window_size(self, self.root, 1800, 700)
         self.root.geometry('1000x700')
         self.root.update()
         wrap = window.footer.winfo_width() - 24
