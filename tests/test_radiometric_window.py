@@ -463,10 +463,13 @@ class WindowTests(unittest.TestCase):
         self.assertIn('70 % of its width and of its height (49 % of its area)', text)
         self.assertIn('# Why not all of it', text)
         self.assertIn('exactly as it was saved', text)
-        save, profile = rw.PROFILE_NOTES['save'][1], rw.PROFILE_NOTES['profile'][1]
+        save, profile = rw.PROFILE_NOTES['save'][1], rw.PROFILE_NOTES['save_profile'][1]
         self.assertIn('done by itself when you run', save)
         self.assertIn('Running does not make a profile', profile)
         self.assertIn('radiometric_result.json', profile)
+        load = rw.PROFILE_NOTES['load_profile'][1]
+        for name in ('radiometric_result.json', '<capture>_provenance.json', 'panel_regions.json'):
+            self.assertIn(name, load)
 
     def test_the_inner_area_of_the_tool_is_kept_in_the_configuration(self):
         from radiometric_app.panel_selector import SelectionResults
@@ -774,7 +777,7 @@ class WindowTests(unittest.TestCase):
         self.assertIn('was not loaded', self.frame.status.cget('text'))
         self.assertIn('OLD.key', self.frame.status.cget('text'))
         self.assertEqual(self.frame.model.raw, before)
-        notes = rw.PROFILE_NOTES['profile'][1]
+        notes = rw.PROFILE_NOTES['load_profile'][1]
         self.assertIn('radiometric_result.json of a past run', notes)
 
     def test_a_profile_saves_every_value_and_restores_them(self):
@@ -1492,6 +1495,15 @@ class HelpColumnTests(unittest.TestCase):
             self.root.update()
             time.sleep(0.02)
         self.assertEqual(panel.shown[0], 'Inputs')
+
+    def test_the_buttons_at_the_bottom_are_explained_under_the_pointer(self):
+        panel = self.frame.help_panel
+        self.root.update()
+        for key, title in (('load_profile', 'Load profile...'), ('save_profile', 'Save profile...'),
+                           ('save', 'Update saved configuration')):
+            self.frame.buttons[key].event_generate('<Motion>', x=3, y=3)     # as the mouse does, through the window
+            self.root.update()
+            self.assertEqual(panel.shown[0], title)
 
     def test_the_explanation_stays_while_the_pointer_is_over_the_column(self):
         panel = self.frame.help_panel

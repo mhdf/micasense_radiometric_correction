@@ -132,16 +132,26 @@ PROFILE_NOTES = {
                                            "settings of each run are in its results folder (radiometric_result.json), and a "
                                            "profile keeps a setup under a name. It is done by itself when you run the "
                                            "correction, so the button is for keeping changes without running."),
-    'profile': ("Profiles", "A profile is a named copy of all the values, for a camera or a flight, kept apart from the "
-                            "working configuration.\n"
-                            "- Save profile...: writes every value in a file that you name (the config/profiles folder is "
-                            "proposed). The working configuration does not change.\n"
-                            "- Load profile...: replaces the values in the window with those of a profile; they become the "
-                            "working configuration when you save or run. It also reads the radiometric_result.json of a past "
-                            "run (or a provenance record), to bring back the settings that run used; the results folder "
-                            "then is that of the run.\n"
-                            "Running does not make a profile, but every run writes the complete configuration that it used "
-                            "in radiometric_result.json (and in the provenance record of each capture), next to the results."),
+    'save_profile': ("Save profile...", "A profile is a named copy of all the values, for a camera or a flight, kept "
+                     "apart from the working configuration. This button writes every value in the window in a json file "
+                     "that you name (the config/profiles folder is proposed); the working configuration does not change.\n"
+                     "Running does not make a profile, but every run writes the complete configuration that it used in "
+                     "radiometric_result.json (and in the provenance record of each capture), next to the results: Load "
+                     "profile... reads those too."),
+    'load_profile': ("Load profile...", "Replaces the values in the window with those of a json file; they become the "
+                     "working configuration when you save or run.\n"
+                     "# Files that can be loaded\n"
+                     "- A profile, written with Save profile... (in config/profiles).\n"
+                     "- radiometric_result.json of a past run, in its results folder: the settings that the run used, its "
+                     "folders included (the results folder then is that of the run).\n"
+                     "- <capture>_provenance.json, in the same folder: the same settings, kept with each corrected "
+                     "capture.\n"
+                     "- The saved configuration (config/radiometric_inputs.json).\n"
+                     "# Not a profile\n"
+                     "- panel_regions.json holds the panel regions drawn in each band: choose it in 'Panel regions drawn by "
+                     "hand' (Reference panel page).\n"
+                     "A file with keys that this version of the program does not know is not loaded, and the keys are "
+                     "named."),
 }
 
 # What each output uses: the reflectance from the DLS alone only compares the panel with the DLS (the panel captures and
@@ -417,6 +427,7 @@ class RadiometricFrame:
         save_profile.pack(side='right', padx=(0, 6))
         load_profile = ttk.Button(bottom, text='Load profile...', command=self.load_profile_from)
         load_profile.pack(side='right', padx=(0, 6))
+        self.buttons['save_profile'], self.buttons['load_profile'] = save_profile, load_profile
         self.status = ttk.Label(bottom, style='Muted.TLabel', text=f"Configuration file: {self.config_path}")
         self.status.pack(side='left')                       # packed last: a long path gives way to the buttons
 
@@ -460,9 +471,9 @@ class RadiometricFrame:
         self.panels_used_ok = chosen if self._panels_used_allowed(chosen) else 'first'
         self.results_before = self.model.get('INPUTS.results_folder')
         self.help_panel.describe(save_button, *PROFILE_NOTES['save'])
-        self.help_panel.describe(save_profile, *PROFILE_NOTES['profile'])
-        self.help_panel.describe(load_profile, *PROFILE_NOTES['profile'])
-        self.help_panel.follow(self.parent.winfo_toplevel())
+        self.help_panel.describe(save_profile, *PROFILE_NOTES['save_profile'])
+        self.help_panel.describe(load_profile, *PROFILE_NOTES['load_profile'])
+        self.help_panel.follow(self.parent.winfo_toplevel(), self.widget)       # the pages and the buttons at the bottom
 
     def _build_band_section(self, page):
         tk, ttk = self.tk, self.ttk
