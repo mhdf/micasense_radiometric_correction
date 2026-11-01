@@ -19,6 +19,7 @@ This Python module provides a simplified alternative for converting raw images f
   - [Other cameras and other numbers of bands](docs/other-cameras.md)
   - [Development notes](docs/development.md)
 - [Background and credits](#background-and-credits)
+- [License and citation](#license-and-citation)
 
 <p align="center">
   <img src="docs/workflow_tools.png" width="900"
@@ -69,5 +70,9 @@ The same pages are also published as a website, with a side bar and a search: [m
 All functions are derived from the original [MicaSense image processing repository](https://github.com/micasense/imageprocessing) but have been streamlined to mitigate issues caused by Exif metadata inconsistencies. These issues were encountered while pre-processing images captured with the camera firmware v1.4.5 in preparation for geometric correction using photogrammetry software.
 
 For more details about the steps required for pre-processing MicaSense multispectral images see the tutorials (e.g. ['Tutorial 1'](https://github.com/micasense/imageprocessing/blob/master/MicaSense%20Image%20Processing%20Tutorial%201.ipynb)) provided by MicaSense in their repository.
+
+## License and citation
+
+The program is distributed under the [MIT License](LICENSE), which also keeps the copyright notice of the MicaSense code it is derived from. To cite it, use "Cite this repository" on the GitHub page of the repository, which gives the reference from [CITATION.cff](CITATION.cff), and give the version used (the provenance record of each corrected capture also keeps a fingerprint of the code that produced it).
 
 </div>
