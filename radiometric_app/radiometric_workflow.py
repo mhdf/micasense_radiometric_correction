@@ -241,8 +241,11 @@ FIELDS = [
     {'key': 'PANEL.panel_orientation', 'kind': 'text', 'default': 'all', 'group': 'Reference panel',
      'label': 'Panel captures used, by orientation',
      'help': ("The panel can be photographed with the camera facing the sun, with its back to it or with the sun at its "
-                  "side, and the orientations can give different factors (the panel does not reflect the same in every "
-                  "direction, and a shadow falls differently).\n"
+                  "side. The panel reflects almost equally in every direction (close to a Lambertian surface), so "
+                  "turning the camera alone should change little, but the orientations can still give different "
+                  "factors: the shadow of the operator or of the aircraft, light reflected onto the panel by the "
+                  "operator, a panel or camera that is not level, and, with the DLS correction, a DLS that faces the "
+                  "sun differently.\n"
                   "The orientation of each panel capture is read from its metadata: the heading of the camera "
                   "(XMP:Yaw) against the direction of the sun (XMP:SolarAzimuth), 0 degrees facing the sun and 180 with "
                   "the back to it. The captures whose headings are within 20 degrees of each other are one orientation, "
