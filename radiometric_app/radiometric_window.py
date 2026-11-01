@@ -161,12 +161,12 @@ PANEL_KEYS = ('INPUTS.reference_panel_capture', 'PANEL.reflectance_source', 'PAN
               'PANEL.percent_inner_area', 'PANEL.saturation_threshold', 'PANEL.manual_regions_file') + PANEL_CHOICE_KEYS
 DLS_LIMIT_KEYS = ('CHECKS.band_ratio_tolerance', 'CHECKS.ratio_range_min', 'CHECKS.ratio_range_max',
                   'CHECKS.max_sun_angle_discrepancy_deg', 'CHECKS.jump_threshold', 'CHECKS.panel_drift_tolerance',
-                  'CHECKS.panel_capture_spread_tolerance', 'CHECKS.panel_illumination_tolerance')
+                  'CHECKS.panel_illumination_tolerance')
 PANEL_CHECK_NOTE = ("Measures all the panel captures listed, without correcting anything, and shows them in a table: the "
                     "moment of each one (before or after the flight, from its time), its heading against the sun, and how "
                     "far it is from the other captures of its moment (the largest band). A capture that departs more than "
-                    "the spread limit is flagged; the limit can be changed in the table (it is the 'Spread of the panel "
-                    "captures of one moment' of the DLS page, also used by the run).\n"
+                    "the spread limit is flagged. The limit is set at the top of the table, and it is saved with the "
+                    "configuration and used by the run (CHECKS.panel_capture_spread_tolerance).\n"
                     "This limit is for captures of the same moment, a few seconds apart, so it is small (2 %). 'Light of "
                     "the panel: largest difference' (15 %) is another check: it compares the light of each image with "
                     "that of the nearest panel capture.\n"
@@ -1309,7 +1309,7 @@ class RadiometricFrame:
             side='left')
         limit_text = tk.StringVar(window, f"{100 * self.model.config()[0]['CHECKS.panel_capture_spread_tolerance']:g}")
         ttk.Entry(limit_line, textvariable=limit_text, width=6).pack(side='left', padx=6)
-        ttk.Label(limit_line, text='%  (also the limit of the run; DLS page)', style='Muted.TLabel').pack(side='left')
+        ttk.Label(limit_line, text='%  (saved with the configuration and used by the run)', style='Muted.TLabel').pack(side='left')
         columns = ('time', 'moment', 'heading', 'orientation', 'departure', 'flag')
         tree = ttk.Treeview(frame, columns=columns, selectmode='extended', height=min(max(len(rows), 4), 16))
         for column, title, width in (('#0', 'Capture', 110), ('time', 'Time', 80), ('moment', 'Moment', 70),

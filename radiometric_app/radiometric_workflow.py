@@ -248,7 +248,8 @@ FIELDS = [
                   "the back to it. The captures whose headings are within 20 degrees of each other are one orientation, "
                   "and the list offers the orientations found among the panel captures.\n"
                   "- All the panel captures (all): every capture listed is used. When one moment has captures of "
-                  "several orientations and they differ more than the spread limit (DLS page), a flag says so.\n"
+                  "several orientations and they differ more than the spread limit (set in Check panel captures), a "
+                  "flag says so.\n"
                   "- One orientation (its heading is saved, for example 30): only the captures within 20 degrees of it "
                   "are used, so that one protocol is followed.\n"
                   "The heading is only as good as XMP:Yaw: check it in Check panel captures.")},
@@ -443,7 +444,7 @@ FIELDS = [
                   "those after the flight also calibrate the images is chosen in 'Panel selection approach'.\n"
                   "With several captures before or after the flight, their means are compared.")},
     {'key': 'CHECKS.panel_capture_spread_tolerance', 'group': 'Checks of the DLS data (limits)', 'kind': 'float',
-     'default': 0.02, 'label': 'Spread of the panel captures of one moment',
+     'default': 0.02, 'dialog': True, 'label': 'Spread of the panel captures of one moment',
      'help': ("When several captures of the panel are taken one after the other (before or after the flight), they are "
                   "averaged. Largest spread accepted (0.02 = 2 %, standard deviation / mean) of what is averaged, band by "
                   "band:\n"
@@ -461,8 +462,7 @@ FIELDS = [
                   "like its own, and another panel capture under that light would help. A flag does not change the "
                   "result.\n"
                   "It is not the limit for the panel captures of one moment (before or after the flight), which are "
-                  "compared with each other under 'Spread of the panel captures of one moment' (2 %), also shown in "
-                  "Check panel captures.")},
+                  "compared with each other with a smaller limit (2 %), set in Check panel captures (Inputs page).")},
     {'key': 'CHECKS.max_camera_tilt_deg', 'group': 'Acquisition geometry (limits)', 'kind': 'float', 'default': rct.GEOMETRY_CHECKS['max_camera_tilt_deg'],
      'label': 'Largest camera tilt (deg)',
      'help': ("Largest angle accepted between the optical axis of the camera and the vertical, in degrees, in the "

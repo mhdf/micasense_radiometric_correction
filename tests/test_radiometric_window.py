@@ -1021,7 +1021,8 @@ class WindowTests(unittest.TestCase):
         for key in keys:
             self.assertIn(key, self.frame.variables)
         for key in keys[1:]:
-            self.assertTrue(self.inside(self.frame.entries[key], 'CORRECTION'), key)
+            if key != 'CHECKS.panel_capture_spread_tolerance':                  # set in the table of the panel captures
+                self.assertTrue(self.inside(self.frame.entries[key], 'CORRECTION'), key)
         self.assertNotIn('CHECKS', self.frame.pages)
 
     def test_the_dls_page_has_a_heading_for_each_part(self):
@@ -1291,6 +1292,7 @@ class WindowTests(unittest.TestCase):
         texts = [child.cget('text') for child in window.winfo_children()[0].winfo_children()
                  if child.winfo_class() == 'TLabel']
         self.assertTrue(any('IMG_0422 is the only panel capture after the flight' in text for text in texts), texts)
+        self.assertNotIn('CHECKS.panel_capture_spread_tolerance', self.frame.entries)   # not on the DLS page
         self.frame.panel_check_limit.set('10')                                  # the limit is changed in the table
         self.assertEqual(tree.item('IMG_0005')['tags'], '')
         self.assertEqual(tree.set('IMG_0005', 'flag'), '')
