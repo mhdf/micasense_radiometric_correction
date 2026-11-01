@@ -201,6 +201,10 @@ class ConfigModel:
             return {band: str(number) for band, number in value.items()}
         if field['kind'] == 'bool':
             return bool(value)
+        if field['kind'] == 'folders':
+            return rct.FOLDER_SEPARATOR.join(rct.folder_list(value))
+        if field['kind'] == 'capture_folders':
+            return json.dumps(value) if value else ''
         return str(value)
 
     @classmethod
@@ -227,6 +231,17 @@ class ConfigModel:
                 return bool(raw), None
             if kind in ('folder', 'file', 'text', 'choice'):
                 return str(raw).strip(), None
+            if kind == 'folders':                        # one folder is saved as a path, several as a list
+                folders = rct.folder_list(raw)
+                return (folders[0] if len(folders) == 1 else folders or ''), None
+            if kind == 'capture_folders':
+                try:
+                    value = json.loads(raw) if str(raw).strip() else {}
+                except ValueError:
+                    value = None
+                if not isinstance(value, dict) or not all(isinstance(item, str) for item in value.values()):
+                    return None, 'must be a dictionary {capture name: folder}'
+                return value, None
             if kind == 'float':
                 return float(raw), None
             if kind == 'int':
@@ -567,9 +582,9 @@ class RadiometricFrame:
                                          width=18)
                 else:
                     entry = ttk.Entry(line, textvariable=variable, width=12 if kind in ('float', 'int') else 56)
-                entry.pack(side='left', fill='x', expand=kind in ('folder', 'file', 'text'))
+                entry.pack(side='left', fill='x', expand=kind in ('folder', 'folders', 'file', 'text'))
                 widgets.append(entry)
-                if kind in ('folder', 'file'):
+                if kind in ('folder', 'folders', 'file'):
                     command = self.browse_spectrum if key == 'PANEL.spectral_file' else (
                         lambda key=key, kind=kind: self._browse(key, kind))
                     browse = ttk.Button(line, text='Browse...', command=command)
@@ -591,7 +606,9 @@ class RadiometricFrame:
                     ttk.Button(line, text='Suggest from files', command=self.suggest_pattern).pack(side='left', padx=(6, 0))
                 variable.trace_add('write', lambda *_, key=key, variable=variable: self._changed(key, variable.get()))
                 self.variables[key], self.entries[key] = variable, entry
-        if key == 'INPUTS.image_captures':                          # only what is wrong is written on the page
+        if key == 'INPUTS.images_folder':                           # only what is wrong is written on the page
+            self.images_summary = ttk.Label(row, text='', style='Error.TLabel', wraplength=760, justify='left')
+        if key == 'INPUTS.image_captures':
             self.captures_summary = ttk.Label(row, text='', style='Error.TLabel', wraplength=760, justify='left')
         if key == 'INPUTS.file_pattern':
             self.pattern_preview = ttk.Label(row, text='', style='Error.TLabel', wraplength=760, justify='left')
@@ -814,8 +831,7 @@ class RadiometricFrame:
     def capture_names(self, with_empty=False):
         """ Names of the captures that the file name pattern finds in the images folder ([] if it cannot be read) """
         try:
-            names = rct.list_capture_names(wf.resolve_path(self.root_folder, self.model.get('INPUTS.images_folder')),
-                                           self.model.get('INPUTS.file_pattern'))
+            names = rct.list_capture_names(self._images_source(), self.model.get('INPUTS.file_pattern'))
         except (OSError, ValueError):
             names = []
         return ([''] if with_empty else []) + names
@@ -823,7 +839,7 @@ class RadiometricFrame:
     def _picker_arguments(self):
         """ What the window of captures needs: the names, the files of each capture and the bands that can be shown """
         config, _ = self.model.config()
-        folder = wf.resolve_path(self.root_folder, config['INPUTS.images_folder'])
+        folder = wf.images_source(config, self.root_folder)
         pattern = config['INPUTS.file_pattern']
         names = self.capture_names()
         bands = [row['name'].strip() for row in self.band_table.get_rows() if row['process'] and row['name'].strip()]
@@ -885,9 +901,8 @@ class RadiometricFrame:
         return [name for key in CAPTURE_KEYS for name in wf.capture_names(self.model.get(key))]
 
     def suggest_pattern(self):
-        folder = wf.resolve_path(self.root_folder, self.model.get('INPUTS.images_folder'))
         try:
-            pattern = rct.suggest_file_pattern(path.name for path in folder.iterdir() if path.is_file())
+            pattern = rct.suggest_file_pattern(path.name for _, path in self._images_source().files())
         except OSError as error:
             self.log(f"The images folder cannot be read: {error}", 'error')
             return
@@ -912,6 +927,26 @@ class RadiometricFrame:
         if len(names) > limit:
             shown.append(f"- and {len(names) - limit} more")
         return '\n'.join(shown)
+
+    def _update_images_summary(self):
+        """ What is wrong with the images folders: one that does not exist, a repeated capture used without a choice """
+        if not hasattr(self, 'images_summary'):
+            return
+        config, _ = self.model.config()
+        source = wf.images_source(config, self.root_folder)
+        problems = [f"Folder not found: {folder}." for folder in source.folders if not folder.is_dir()]
+        if not problems:
+            try:
+                names = rct.list_capture_names(source, config['INPUTS.file_pattern'])
+                before, after = wf.panel_capture_groups(config)
+                waiting = rct.unresolved_captures(source, config['INPUTS.file_pattern'],
+                                                  before + after + wf.captures_to_correct(config, names))
+            except (OSError, ValueError):
+                waiting = []
+            if waiting:
+                problems.append(f"In more than one folder, without the copy to use chosen (Browse..., Review repeated "
+                                f"captures): {', '.join(waiting)}.")
+        self._problem(self.images_summary, ' '.join(problems))
 
     def _update_captures_summary(self):
         """ The captures that will be corrected (the typed ones, or all but the panel captures when the field is empty) """
@@ -992,11 +1027,12 @@ class RadiometricFrame:
     def _update_pattern_preview(self):
         """ Read the images folder with the file name pattern """
         self.preview_after = None
+        self._update_images_summary()
         self._update_captures_summary()
         if not hasattr(self, 'pattern_preview'):
             return
         pattern = self.model.get('INPUTS.file_pattern')
-        folder = wf.resolve_path(self.root_folder, self.model.get('INPUTS.images_folder'))
+        folder = self._images_source()
         self._pattern_info = None
         try:
             template = rct.pattern_template(pattern)
@@ -1076,15 +1112,16 @@ class RadiometricFrame:
             self._dls_correction_changed()
         if key == 'PANEL.panels_used' and self._panels_used_allowed(self.model.get(key)):
             self.panels_used_ok = self.model.get(key)
-        if key in ('INPUTS.images_folder', 'INPUTS.file_pattern', 'INPUTS.image_captures', 'INPUTS.excluded_captures',
-                   'INPUTS.reference_panel_capture', 'INPUTS.reference_panel_capture_after'):
+        if key in ('INPUTS.images_folder', 'INPUTS.repeated_capture_folders', 'INPUTS.file_pattern',
+                   'INPUTS.image_captures', 'INPUTS.excluded_captures', 'INPUTS.reference_panel_capture',
+                   'INPUTS.reference_panel_capture_after'):
             if getattr(self, 'preview_after', None) is not None:
                 self.parent.after_cancel(self.preview_after)
             self.preview_after = self.parent.after(400, self._update_pattern_preview)
         if key == 'INPUTS.exiftool_path':
             self._check_exiftool()
-        if key in ('INPUTS.images_folder', 'INPUTS.file_pattern', 'INPUTS.reference_panel_capture',
-                   'INPUTS.exiftool_path', 'CHECKS.heading_offset_deg'):
+        if key in ('INPUTS.images_folder', 'INPUTS.repeated_capture_folders', 'INPUTS.file_pattern',
+                   'INPUTS.reference_panel_capture', 'INPUTS.exiftool_path', 'CHECKS.heading_offset_deg'):
             self._schedule_orientations()
         if key == 'INPUTS.output_product':
             self._apply_output_state()
@@ -1204,7 +1241,7 @@ class RadiometricFrame:
     def _orientations_worker(self, config):
         """ The heading against the sun of each panel capture, from the metadata of its first file """
         try:
-            folder = wf.resolve_path(self.root_folder, config['INPUTS.images_folder'])
+            folder = wf.images_source(config, self.root_folder)
             exiftool = wf.exiftool_executable(config, self.root_folder)
             headings = {}
             for name in wf.panel_capture_groups(config)[0]:
@@ -1447,6 +1484,9 @@ class RadiometricFrame:
         Choose a folder or a file for a field. A folder is chosen in a window that lists its files and shows a picture of
         the image that is selected (folder_browser), to recognize the folder of the raw images or the one of the results
         """
+        if kind == 'folders':
+            self._browse_folders(key)
+            return
         current = self.model.get(key)
         start = wf.resolve_path(self.root_folder, current) if current else self.root_folder
         initial = start if start.is_dir() else start.parent
@@ -1471,6 +1511,29 @@ class RadiometricFrame:
             chosen = filedialog.askopenfilename(initialdir=initial)
         if chosen:
             self.variables[key].set(chosen)
+
+    def _browse_folders(self, key):
+        """
+        Choose the images folders: a list built in the folder browser, from any location, with the copy used of each
+        capture that is in more than one of them (INPUTS.repeated_capture_folders)
+        """
+        from .folder_browser import ask_folders
+        config, _ = self.model.config()
+        folders = [wf.resolve_path(self.root_folder, folder) for folder in rct.folder_list(config[key])]
+        initial = next((folder for folder in folders if folder.is_dir()), Path(self.root_folder))
+        chosen = {name: str(wf.resolve_path(self.root_folder, folder))
+                  for name, folder in config['INPUTS.repeated_capture_folders'].items()}
+        answer = ask_folders(self.parent.winfo_toplevel(), self.model.fields[key]['label'], initial, folders, chosen,
+                             config['INPUTS.file_pattern'])
+        if answer is not None:
+            folders, chosen = answer
+            self.variables['INPUTS.repeated_capture_folders'].set(json.dumps(chosen) if chosen else '')
+            self.variables[key].set(rct.FOLDER_SEPARATOR.join(folders))
+
+    def _images_source(self):
+        """ The images folder(s) of the fields, with the copy chosen of each repeated capture (rct.ImageFolders) """
+        config, _ = self.model.config()
+        return wf.images_source(config, self.root_folder)
 
     def set_value(self, key, value, replace=False):
         """

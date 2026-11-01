@@ -520,6 +520,33 @@ class RunTests(unittest.TestCase):
         self.assertAlmostEqual(geometry['panel']['heading_to_sun_deg'], 87.0, places=1)       # what the panel was like
         self.assertFalse([flag for flag in provenance['checks']['flags'] if 'panel capture' in flag and 'Heading' in flag])  # its flag is in the result, once
 
+    def test_the_images_can_be_in_several_folders_and_a_repeated_capture_uses_the_copy_chosen(self):
+        panels, flight = self.folder / 'several_panels', self.folder / 'several_flight'
+        panels.mkdir()
+        flight.mkdir()
+        for path in RAW.glob('IMG_0005_*.tif'):
+            shutil.copy(path, panels / path.name)
+            shutil.copy(path, flight / path.name)                     # the panel capture was also copied with the flight
+        for path in RAW.glob('IMG_0010_*.tif'):
+            shutil.copy(path, flight / path.name)
+        values = config_for(self.folder / 'several_out', **{'INPUTS.images_folder': [str(panels), str(flight)]})
+        problems = wf.validate_config(wf.merge_config(values), ROOT)
+        self.assertTrue(any('more than one images folder' in problem and 'IMG_0005' in problem for problem in problems),
+                        problems)
+        values['INPUTS.repeated_capture_folders'] = {'IMG_0005': str(panels)}
+        self.assertEqual(wf.validate_config(wf.merge_config(values), ROOT), [])
+        result = wf.run(values, ROOT)
+        self.assertEqual(result['status'], 'completed', result['errors'])
+        self.assertEqual(sorted(Path(path).name for path in result['outputs']),
+                         [f'IMG_0010_{number}.tif' for number in range(1, 7)])
+        provenance = (self.folder / 'several_out' / 'IMG_0010_provenance.json').read_text(encoding='utf-8')
+        self.assertIn('several_panels', provenance)                   # the panel files of the copy that was chosen
+        self.assertEqual(result['config']['INPUTS.images_folder'], [str(panels), str(flight)])
+        missing = config_for(self.folder / 'x', **{'INPUTS.images_folder': f"{panels} | {self.folder / 'missing'}"})
+        self.assertIn(f"Images folder not found: {self.folder / 'missing'}", wf.validate_config(wf.merge_config(missing), ROOT))
+        self.assertIn('INPUTS.images_folder must be a path or a list of paths',
+                      wf.validate_config(wf.merge_config(dict(values, **{'INPUTS.images_folder': 3})), ROOT))
+
     def test_the_flags_of_the_panel_are_not_repeated_for_every_capture(self):
         images = self.folder / 'two_captures'
         images.mkdir()

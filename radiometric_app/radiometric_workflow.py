@@ -40,8 +40,9 @@ STAGES = ('LOAD_CAPTURES', 'PANEL_CALIBRATION', 'REFLECTANCE', 'DLS_CHECKS', 'PR
 BAND_NAMES = ('Blue', 'Green', 'Panchro', 'Red', 'Red edge', 'NIR')
 
 # Description of every configuration key: default value, kind of value (for validation and for the editor), label
-# and description. Kinds: folder, file, text, bool, float, int, choice (one of 'choices'), band_values (dictionary
-# {band name: number}, with an optional 'range' (low exclusive, high inclusive)). Optional 'group' is a heading for the
+# and description. Kinds: folder, folders (one path, a list of paths or a text with paths separated by ' | '), file, text,
+# bool, float, int, choice (one of 'choices'), band_values (dictionary {band name: number}, with an optional 'range' (low
+# exclusive, high inclusive)), capture_folders (dictionary {capture name: folder}). Optional 'group' is a heading for the
 # window and 'dialog' marks the keys that the window edits in a dialog instead of on the page
 # What the groups of fields of the window are about (the window shows them under the heading of the group)
 GROUP_NOTES = {
@@ -115,11 +116,27 @@ GROUP_NOTES = {
 }
 
 FIELDS = [
-    {'key': 'INPUTS.images_folder', 'group': 'Folders and tools', 'kind': 'folder', 'default': 'images/raw',
-     'label': 'Images folder', 'help': ("Folder with the raw .tif images of the camera.\n"
+    {'key': 'INPUTS.images_folder', 'group': 'Folders and tools', 'kind': 'folders', 'default': 'images/raw',
+     'label': 'Images folder', 'help': ("Folder with the raw .tif images of the camera, or several folders.\n"
                   "The camera writes one file per band, for example IMG_0010_1.tif to IMG_0010_6.tif; the files of one "
                   "shot are a capture.\n"
-                  "A relative path is read from the project folder. Browse... chooses a folder.")},
+                  "# Several folders\n"
+                  "For example the flight in one folder and the panel captures in another. Their captures are read "
+                  "together, as if they were in one folder; the subfolders are not read. Browse... builds the list: "
+                  "add folders from any location, remove the ones not wanted, then Use selected folders. The paths can "
+                  "also be typed, separated by ' | '.\n"
+                  "# Repeated captures\n"
+                  "A capture name that is in more than one folder (for example a panel capture copied to the folders "
+                  "of two flights) is a repeated capture. Review repeated captures, in Browse..., shows the copies "
+                  "with a picture and chooses the one to use, with all its bands; the other copies are left out. A "
+                  "repeated name does not mean that the images are the same, so every repeated capture that is used "
+                  "needs a choice. No file is moved or deleted.\n"
+                  "A relative path is read from the project folder.")},
+    {'key': 'INPUTS.repeated_capture_folders', 'group': 'Folders and tools', 'kind': 'capture_folders', 'default': {},
+     'dialog': True, 'label': 'Copy used of each repeated capture',
+     'help': ("{capture name: folder}: for a capture that is in more than one of the images folders, the folder of the "
+              "copy that is used. Chosen with Review repeated captures (Browse... of the images folder). A choice for a "
+              "capture that is no longer repeated is not used.")},
     {'key': 'INPUTS.results_folder', 'group': 'Folders and tools', 'kind': 'folder', 'default': 'results/reflectance',
      'label': 'Results folder', 'help': ("Folder where everything that the correction produces is written.\n"
                   "# What goes there\n"
@@ -525,6 +542,16 @@ def resolve_path(root, value):
     return path if path.is_absolute() else Path(root) / path
 
 
+def images_source(config, root='.'):
+    """
+    The images folder(s) of the configuration (INPUTS.images_folder, one or several) with the copy chosen for each repeated
+    capture (INPUTS.repeated_capture_folders), as rct.ImageFolders: what the functions that read captures take
+    """
+    folders = [resolve_path(root, folder) for folder in rct.folder_list(config['INPUTS.images_folder'])]
+    chosen = {name: resolve_path(root, folder) for name, folder in config['INPUTS.repeated_capture_folders'].items()}
+    return rct.ImageFolders(folders, chosen)
+
+
 CONFIG_FOLDER = environment.CONFIG_FOLDER                 # in the project folder: the configuration, the profiles, the own presets
 DEFAULT_CONFIG_NAME = environment.DEFAULT_CONFIG_NAME
 
@@ -561,7 +588,7 @@ pyexiftool_installed = environment.pyexiftool_installed       # whether the Pyth
 
 def read_capture_images(config, root, capture, exiftool_path=None):
     """ {band: rct.Image} of one capture, with the file pattern, the bands and the ignored bands of the configuration """
-    images_folder = resolve_path(root, config['INPUTS.images_folder'])
+    images_folder = images_source(config, root)
     if exiftool_path is None:
         exiftool_path = exiftool_executable(config, root)
     return _read_capture(images_folder, capture, panel_bands(config), exiftool_path,
@@ -573,7 +600,7 @@ def detect_bands(config, root, capture=None):
     Read the bands from the metadata of the files of a capture (default: the panel capture)
     Outputs: the dictionary of rct.read_band_definitions
     """
-    images_folder = resolve_path(root, config['INPUTS.images_folder'])
+    images_folder = images_source(config, root)
     capture = capture or (panel_capture_groups(config)[0] or [''])[0]
     paths = rct.find_capture_paths(images_folder, capture, config['INPUTS.file_pattern'])
     return rct.read_band_definitions(paths, exiftool_executable(config, root))
@@ -750,6 +777,12 @@ def validate_config(config, root='.', regions_file_may_be_missing=False):
         key, kind, value = field['key'], field['kind'], config.get(field['key'], field['default'])
         if kind in ('folder', 'file', 'text') and not isinstance(value, str):
             problems.append(f"{key} must be text")
+        elif kind == 'folders' and not (isinstance(value, str) or
+                                        isinstance(value, list) and all(isinstance(item, str) for item in value)):
+            problems.append(f"{key} must be a path or a list of paths")
+        elif kind == 'capture_folders' and not (isinstance(value, dict) and
+                                                all(isinstance(item, str) for item in value.values())):
+            problems.append(f"{key} must be a dictionary {{capture name: folder}}")
         elif kind == 'bool' and not isinstance(value, bool):
             problems.append(f"{key} must be true or false")
         elif kind == 'float' and not _is_number(value):
@@ -832,9 +865,14 @@ def validate_config(config, root='.', regions_file_may_be_missing=False):
     if not -180 <= config['CHECKS.heading_offset_deg'] <= 180:
         problems.append("CHECKS.heading_offset_deg must be between -180 and 180 degrees")
 
-    images = resolve_path(root, config['INPUTS.images_folder'])
-    if not images.is_dir():
-        problems.append(f"Images folder not found: {images}")
+    images = images_source(config, root)
+    readable = bool(images.folders)
+    if not images.folders:
+        problems.append("INPUTS.images_folder is empty")
+    for folder in images.folders:
+        if not folder.is_dir():
+            problems.append(f"Images folder not found: {folder}")
+            readable = False
     if not config['INPUTS.results_folder'].strip():
         problems.append("INPUTS.results_folder is empty")
     else:
@@ -873,13 +911,19 @@ def validate_config(config, root='.', regions_file_may_be_missing=False):
                          [name for name in typed if name in before_names + after_names])):
         if names:
             problems.append(f"Captures {text}: {', '.join(names)}")
-    if images.is_dir() and pattern_problem is None:
+    if readable and pattern_problem is None:
         found = rct.list_capture_names(images, config['INPUTS.file_pattern'])
         for name in before_names + after_names + typed + excluded:
             if name not in found:
                 problems.append(f"Capture '{name}' not found in {images}")
+        used = before_names + after_names + captures_to_correct(config, found)
         if not typed and not captures_to_correct(config, found):
             problems.append(f"No captures to correct in {images}")
+        unresolved = rct.unresolved_captures(images, config['INPUTS.file_pattern'], used)
+        if unresolved:
+            problems.append(f"Captures in more than one images folder, without the copy to use chosen: "
+                            f"{', '.join(unresolved)} (Browse... of the images folder, Review repeated captures; or "
+                            "INPUTS.repeated_capture_folders)")
     return problems
 
 
@@ -1117,7 +1161,7 @@ def _flight_times(config, root, flight_names):
     """ The times of the first and of the last capture to correct (None when there is none or it has no time) """
     if not flight_names:
         return None
-    images_folder = resolve_path(root, config['INPUTS.images_folder'])
+    images_folder = images_source(config, root)
     times = []
     for name in (flight_names[0], flight_names[-1]):
         paths = rct.find_capture_paths(images_folder, name, config['INPUTS.file_pattern'])
@@ -1162,7 +1206,7 @@ def calibrate_panel_captures(config, root, levels, flight_names, calibrates, use
     Outputs: {'before': {capture: {band: rct.Image}}, 'after': {...}}, the moments that have captures; when only the 'after'
              moment has them, they are the first moment ('before')
     """
-    images_folder = resolve_path(root, config['INPUTS.images_folder'])
+    images_folder = images_source(config, root)
     exiftool_path = exiftool_executable(config, root)
     ignored = capture_names(config['INPUTS.ignored_bands'])
     bands = list(levels)
@@ -1293,7 +1337,7 @@ def check_panel_captures(config, root='.', progress=None):
     """
     config = merge_config(config)
     levels, _ = panel_reflectance_levels(config, root)
-    images_folder = resolve_path(root, config['INPUTS.images_folder'])
+    images_folder = images_source(config, root)
     flight_names = captures_to_correct(config, rct.list_capture_names(images_folder, config['INPUTS.file_pattern']))
     result = {'panel': {}, 'flags': []}
     use_dls = config['CORRECTION.use_dls'] and config['INPUTS.output_product'] == 'panel_reflectance'
@@ -1452,7 +1496,7 @@ def dls_only_panel_check(panels):
 
 
 def _run_stages(config, root, results_folder, result, progress):
-    images_folder = resolve_path(root, config['INPUTS.images_folder'])
+    images_folder = images_source(config, root)
     exiftool_path = exiftool_executable(config, root)
     ignored = capture_names(config['INPUTS.ignored_bands'])
     before_names, after_names = panel_capture_groups(config)

@@ -58,6 +58,17 @@ class ConfigModelTests(unittest.TestCase):
         self.assertEqual(config['PANEL.saturation_threshold'], 65000)
         self.assertEqual(model.overrides(), {'PANEL.percent_inner_area': 0.5})
 
+    def test_one_images_folder_is_saved_as_a_path_and_several_as_a_list(self):
+        model = rw.ConfigModel({'INPUTS.images_folder': ['a/raw', 'b/raw'],
+                                'INPUTS.repeated_capture_folders': {'IMG_0005': 'b/raw'}})
+        self.assertEqual(model.get('INPUTS.images_folder'), 'a/raw | b/raw')
+        self.assertEqual(model.config()[0]['INPUTS.images_folder'], ['a/raw', 'b/raw'])
+        self.assertEqual(model.config()[0]['INPUTS.repeated_capture_folders'], {'IMG_0005': 'b/raw'})
+        model.set('INPUTS.images_folder', ' a/raw | ')
+        self.assertEqual(model.config()[0]['INPUTS.images_folder'], 'a/raw')
+        model.set('INPUTS.repeated_capture_folders', '{not json')
+        self.assertIn('INPUTS.repeated_capture_folders', model.config()[1])
+
     def test_an_integer_typed_with_a_decimal_point_is_accepted(self):
         model = rw.ConfigModel()
         model.set('PANEL.saturation_threshold', '60000.0')
@@ -248,16 +259,23 @@ class WindowTests(unittest.TestCase):
     def test_a_folder_is_chosen_in_the_window_with_the_picture_of_the_images_and_a_file_in_the_dialog_of_the_system(self):
         images = Path(self.folder.name) / 'flight' / 'raw'
         images.mkdir(parents=True)
+        panels = Path(self.folder.name) / 'panels'
         self.frame.set_value('INPUTS.images_folder', str(images))
-        with mock.patch('radiometric_app.folder_browser.ask_folder', return_value=str(images.parent)) as ask:
-            self.frame._browse('INPUTS.images_folder', 'folder')
+        answer = ([str(images), str(panels)], {'IMG_0005': str(panels)})
+        with mock.patch('radiometric_app.folder_browser.ask_folders', return_value=answer) as ask:
+            self.frame._browse('INPUTS.images_folder', 'folders')
         arguments = ask.call_args[0]
-        self.assertEqual((arguments[1], arguments[2]), ('Images folder', images))
+        self.assertEqual(arguments[1:], ('Images folder', images, [images], {}, rct_pattern()))
         self.assertIs(arguments[0], self.frame.parent.winfo_toplevel())
-        self.assertEqual(self.frame.variables['INPUTS.images_folder'].get(), str(images.parent))
-        with mock.patch('radiometric_app.folder_browser.ask_folder', return_value='') as ask:       # cancelled: nothing changes
-            self.frame._browse('INPUTS.images_folder', 'folder')
-        self.assertEqual(self.frame.variables['INPUTS.images_folder'].get(), str(images.parent))
+        self.assertEqual(self.frame.variables['INPUTS.images_folder'].get(), f"{images} | {panels}")
+        config = self.frame.model.config()[0]
+        self.assertEqual(config['INPUTS.images_folder'], [str(images), str(panels)])
+        self.assertEqual(config['INPUTS.repeated_capture_folders'], {'IMG_0005': str(panels)})
+        with mock.patch('radiometric_app.folder_browser.ask_folders', return_value=None) as ask:    # cancelled: nothing changes
+            self.frame._browse('INPUTS.images_folder', 'folders')
+        self.assertEqual(ask.call_args[0][3:5], ([images, panels], {'IMG_0005': str(panels)}))     # what is there is shown
+        self.assertEqual(self.frame.variables['INPUTS.images_folder'].get(), f"{images} | {panels}")
+        self.frame.set_value('INPUTS.images_folder', str(images.parent))
         missing = Path(self.folder.name) / 'not_yet' / 'results'                                    # it does not exist yet
         self.frame.set_value('INPUTS.results_folder', str(missing))
         with mock.patch('radiometric_app.folder_browser.ask_folder', return_value='') as ask:

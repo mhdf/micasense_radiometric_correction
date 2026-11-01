@@ -1128,7 +1128,7 @@ def main(argv=None):
     first = arguments.capture or required[0]
     regions_path = wf.resolve_path(root, config['PANEL.manual_regions_file'] or
                                    Path(config['INPUTS.results_folder']) / 'panel_regions.json')
-    images_folder = wf.resolve_path(root, config['INPUTS.images_folder'])
+    images_folder = wf.images_source(config, root)
     names = rct.list_capture_names(images_folder, config['INPUTS.file_pattern'])
     preloaded = {}
     for name in required:
