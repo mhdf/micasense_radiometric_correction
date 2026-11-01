@@ -17,9 +17,3 @@
   line-height: 1.3;
   white-space: normal;
 }
-
-// The first line of each paragraph of the justified text is indented on the website (GitHub does not show styles, so the
-// Markdown files have no indent)
-div[align="justify"] > p {
-  text-indent: 2em;
-}
