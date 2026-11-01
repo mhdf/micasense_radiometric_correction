@@ -40,8 +40,9 @@ STAGES = ('LOAD_CAPTURES', 'PANEL_CALIBRATION', 'REFLECTANCE', 'DLS_CHECKS', 'PR
 BAND_NAMES = ('Blue', 'Green', 'Panchro', 'Red', 'Red edge', 'NIR')
 
 # Description of every configuration key: default value, kind of value (for validation and for the editor), label
-# and description. Kinds: folder, file, text, bool, float, int, choice (one of 'choices'), band_values (dictionary
-# {band name: number}, with an optional 'range' (low exclusive, high inclusive)). Optional 'group' is a heading for the
+# and description. Kinds: folder, folders (one path, a list of paths or a text with paths separated by ' | '), file, text,
+# bool, float, int, choice (one of 'choices'), band_values (dictionary {band name: number}, with an optional 'range' (low
+# exclusive, high inclusive)), capture_folders (dictionary {capture name: folder}). Optional 'group' is a heading for the
 # window and 'dialog' marks the keys that the window edits in a dialog instead of on the page
 # What the groups of fields of the window are about (the window shows them under the heading of the group)
 GROUP_NOTES = {
@@ -115,11 +116,27 @@ GROUP_NOTES = {
 }
 
 FIELDS = [
-    {'key': 'INPUTS.images_folder', 'group': 'Folders and tools', 'kind': 'folder', 'default': 'images/raw',
-     'label': 'Images folder', 'help': ("Folder with the raw .tif images of the camera.\n"
+    {'key': 'INPUTS.images_folder', 'group': 'Folders and tools', 'kind': 'folders', 'default': 'images/raw',
+     'label': 'Images folder', 'help': ("Folder with the raw .tif images of the camera, or several folders.\n"
                   "The camera writes one file per band, for example IMG_0010_1.tif to IMG_0010_6.tif; the files of one "
                   "shot are a capture.\n"
-                  "A relative path is read from the project folder. Browse... chooses a folder.")},
+                  "# Several folders\n"
+                  "For example the flight in one folder and the panel captures in another. Their captures are read "
+                  "together, as if they were in one folder; the subfolders are not read. Browse... builds the list: "
+                  "add folders from any location, remove the ones not wanted, then Use selected folders. The paths can "
+                  "also be typed, separated by ' | '.\n"
+                  "# Repeated captures\n"
+                  "A capture name that is in more than one folder (for example a panel capture copied to the folders "
+                  "of two flights) is a repeated capture. Review repeated captures, in Browse..., shows the copies "
+                  "with a picture and chooses the one to use, with all its bands; the other copies are left out. A "
+                  "repeated name does not mean that the images are the same, so every repeated capture that is used "
+                  "needs a choice. No file is moved or deleted.\n"
+                  "A relative path is read from the project folder.")},
+    {'key': 'INPUTS.repeated_capture_folders', 'group': 'Folders and tools', 'kind': 'capture_folders', 'default': {},
+     'dialog': True, 'label': 'Copy used of each repeated capture',
+     'help': ("{capture name: folder}: for a capture that is in more than one of the images folders, the folder of the "
+              "copy that is used. Chosen with Review repeated captures (Browse... of the images folder). A choice for a "
+              "capture that is no longer repeated is not used.")},
     {'key': 'INPUTS.results_folder', 'group': 'Folders and tools', 'kind': 'folder', 'default': 'results/reflectance',
      'label': 'Results folder', 'help': ("Folder where everything that the correction produces is written.\n"
                   "# What goes there\n"
@@ -217,21 +234,31 @@ FIELDS = [
                   "captures, only the last one taken before the image and the first one after it are used, weighted by "
                   "time, without averaging; an image before the first or after the last uses the closest. This is what "
                   "Metashape 2.3.1 does.\n"
-                  "With only one moment (all the panel captures before the flight, for example), every choice uses it.\n"
+                  "# Panel captures of one moment only\n"
+                  "When all the panel captures are of one moment (all before the flight, for example), there is no "
+                  "other moment to choose or weigh, so every choice calibrates all the images with that moment: the "
+                  "mean of its captures, band by band, each capture with the same weight (with the DLS correction, each "
+                  "one first adjusted to the light of the image). The exception is 'Closest single capture' "
+                  "(adjacent_time): each image uses only the capture of that moment taken closest in time to it, "
+                  "without averaging. The run says in a flag that only one moment was used.\n"
                   "This choice changes the result: it decides which panel data are used.\n"
                   "With the DLS correction on, each panel capture is first adjusted to the light of the image with its own "
                   "DLS reading (panel factor x E_panel / E_image), and then they are combined.")},
     {'key': 'PANEL.panel_orientation', 'kind': 'text', 'default': 'all', 'group': 'Reference panel',
      'label': 'Panel captures used, by orientation',
      'help': ("The panel can be photographed with the camera facing the sun, with its back to it or with the sun at its "
-                  "side, and the orientations can give different factors (the panel does not reflect the same in every "
-                  "direction, and a shadow falls differently).\n"
+                  "side. The panel reflects almost equally in every direction (close to a Lambertian surface), so "
+                  "turning the camera alone should change little, but the orientations can still give different "
+                  "factors: the shadow of the operator or of the aircraft, light reflected onto the panel by the "
+                  "operator, a panel or camera that is not level, and, with the DLS correction, a DLS that faces the "
+                  "sun differently.\n"
                   "The orientation of each panel capture is read from its metadata: the heading of the camera "
                   "(XMP:Yaw) against the direction of the sun (XMP:SolarAzimuth), 0 degrees facing the sun and 180 with "
                   "the back to it. The captures whose headings are within 20 degrees of each other are one orientation, "
                   "and the list offers the orientations found among the panel captures.\n"
                   "- All the panel captures (all): every capture listed is used. When one moment has captures of "
-                  "several orientations and they differ more than the spread limit (DLS page), a flag says so.\n"
+                  "several orientations and they differ more than the spread limit (set in Check panel captures), a "
+                  "flag says so.\n"
                   "- One orientation (its heading is saved, for example 30): only the captures within 20 degrees of it "
                   "are used, so that one protocol is followed.\n"
                   "The heading is only as good as XMP:Yaw: check it in Check panel captures.")},
@@ -426,7 +453,7 @@ FIELDS = [
                   "those after the flight also calibrate the images is chosen in 'Panel selection approach'.\n"
                   "With several captures before or after the flight, their means are compared.")},
     {'key': 'CHECKS.panel_capture_spread_tolerance', 'group': 'Checks of the DLS data (limits)', 'kind': 'float',
-     'default': 0.02, 'label': 'Spread of the panel captures of one moment',
+     'default': 0.02, 'dialog': True, 'label': 'Spread of the panel captures of one moment',
      'help': ("When several captures of the panel are taken one after the other (before or after the flight), they are "
                   "averaged. Largest spread accepted (0.02 = 2 %, standard deviation / mean) of what is averaged, band by "
                   "band:\n"
@@ -442,7 +469,9 @@ FIELDS = [
                   "Largest difference accepted (0.15 = about 15 %) between the DLS irradiance of an image and that of the "
                   "panel that is the most like it. A capture beyond it is flagged: no panel was photographed in light "
                   "like its own, and another panel capture under that light would help. A flag does not change the "
-                  "result.")},
+                  "result.\n"
+                  "It is not the limit for the panel captures of one moment (before or after the flight), which are "
+                  "compared with each other with a smaller limit (2 %), set in Check panel captures (Inputs page).")},
     {'key': 'CHECKS.max_camera_tilt_deg', 'group': 'Acquisition geometry (limits)', 'kind': 'float', 'default': rct.GEOMETRY_CHECKS['max_camera_tilt_deg'],
      'label': 'Largest camera tilt (deg)',
      'help': ("Largest angle accepted between the optical axis of the camera and the vertical, in degrees, in the "
@@ -525,6 +554,16 @@ def resolve_path(root, value):
     return path if path.is_absolute() else Path(root) / path
 
 
+def images_source(config, root='.'):
+    """
+    The images folder(s) of the configuration (INPUTS.images_folder, one or several) with the copy chosen for each repeated
+    capture (INPUTS.repeated_capture_folders), as rct.ImageFolders: what the functions that read captures take
+    """
+    folders = [resolve_path(root, folder) for folder in rct.folder_list(config['INPUTS.images_folder'])]
+    chosen = {name: resolve_path(root, folder) for name, folder in config['INPUTS.repeated_capture_folders'].items()}
+    return rct.ImageFolders(folders, chosen)
+
+
 CONFIG_FOLDER = environment.CONFIG_FOLDER                 # in the project folder: the configuration, the profiles, the own presets
 DEFAULT_CONFIG_NAME = environment.DEFAULT_CONFIG_NAME
 
@@ -561,7 +600,7 @@ pyexiftool_installed = environment.pyexiftool_installed       # whether the Pyth
 
 def read_capture_images(config, root, capture, exiftool_path=None):
     """ {band: rct.Image} of one capture, with the file pattern, the bands and the ignored bands of the configuration """
-    images_folder = resolve_path(root, config['INPUTS.images_folder'])
+    images_folder = images_source(config, root)
     if exiftool_path is None:
         exiftool_path = exiftool_executable(config, root)
     return _read_capture(images_folder, capture, panel_bands(config), exiftool_path,
@@ -573,7 +612,7 @@ def detect_bands(config, root, capture=None):
     Read the bands from the metadata of the files of a capture (default: the panel capture)
     Outputs: the dictionary of rct.read_band_definitions
     """
-    images_folder = resolve_path(root, config['INPUTS.images_folder'])
+    images_folder = images_source(config, root)
     capture = capture or (panel_capture_groups(config)[0] or [''])[0]
     paths = rct.find_capture_paths(images_folder, capture, config['INPUTS.file_pattern'])
     return rct.read_band_definitions(paths, exiftool_executable(config, root))
@@ -750,6 +789,12 @@ def validate_config(config, root='.', regions_file_may_be_missing=False):
         key, kind, value = field['key'], field['kind'], config.get(field['key'], field['default'])
         if kind in ('folder', 'file', 'text') and not isinstance(value, str):
             problems.append(f"{key} must be text")
+        elif kind == 'folders' and not (isinstance(value, str) or
+                                        isinstance(value, list) and all(isinstance(item, str) for item in value)):
+            problems.append(f"{key} must be a path or a list of paths")
+        elif kind == 'capture_folders' and not (isinstance(value, dict) and
+                                                all(isinstance(item, str) for item in value.values())):
+            problems.append(f"{key} must be a dictionary {{capture name: folder}}")
         elif kind == 'bool' and not isinstance(value, bool):
             problems.append(f"{key} must be true or false")
         elif kind == 'float' and not _is_number(value):
@@ -832,9 +877,14 @@ def validate_config(config, root='.', regions_file_may_be_missing=False):
     if not -180 <= config['CHECKS.heading_offset_deg'] <= 180:
         problems.append("CHECKS.heading_offset_deg must be between -180 and 180 degrees")
 
-    images = resolve_path(root, config['INPUTS.images_folder'])
-    if not images.is_dir():
-        problems.append(f"Images folder not found: {images}")
+    images = images_source(config, root)
+    readable = bool(images.folders)
+    if not images.folders:
+        problems.append("INPUTS.images_folder is empty")
+    for folder in images.folders:
+        if not folder.is_dir():
+            problems.append(f"Images folder not found: {folder}")
+            readable = False
     if not config['INPUTS.results_folder'].strip():
         problems.append("INPUTS.results_folder is empty")
     else:
@@ -873,13 +923,19 @@ def validate_config(config, root='.', regions_file_may_be_missing=False):
                          [name for name in typed if name in before_names + after_names])):
         if names:
             problems.append(f"Captures {text}: {', '.join(names)}")
-    if images.is_dir() and pattern_problem is None:
+    if readable and pattern_problem is None:
         found = rct.list_capture_names(images, config['INPUTS.file_pattern'])
         for name in before_names + after_names + typed + excluded:
             if name not in found:
                 problems.append(f"Capture '{name}' not found in {images}")
+        used = before_names + after_names + captures_to_correct(config, found)
         if not typed and not captures_to_correct(config, found):
             problems.append(f"No captures to correct in {images}")
+        unresolved = rct.unresolved_captures(images, config['INPUTS.file_pattern'], used)
+        if unresolved:
+            problems.append(f"Captures in more than one images folder, without the copy to use chosen: "
+                            f"{', '.join(unresolved)} (Browse... of the images folder, Review repeated captures; or "
+                            "INPUTS.repeated_capture_folders)")
     return problems
 
 
@@ -1117,7 +1173,7 @@ def _flight_times(config, root, flight_names):
     """ The times of the first and of the last capture to correct (None when there is none or it has no time) """
     if not flight_names:
         return None
-    images_folder = resolve_path(root, config['INPUTS.images_folder'])
+    images_folder = images_source(config, root)
     times = []
     for name in (flight_names[0], flight_names[-1]):
         paths = rct.find_capture_paths(images_folder, name, config['INPUTS.file_pattern'])
@@ -1162,7 +1218,7 @@ def calibrate_panel_captures(config, root, levels, flight_names, calibrates, use
     Outputs: {'before': {capture: {band: rct.Image}}, 'after': {...}}, the moments that have captures; when only the 'after'
              moment has them, they are the first moment ('before')
     """
-    images_folder = resolve_path(root, config['INPUTS.images_folder'])
+    images_folder = images_source(config, root)
     exiftool_path = exiftool_executable(config, root)
     ignored = capture_names(config['INPUTS.ignored_bands'])
     bands = list(levels)
@@ -1289,11 +1345,13 @@ def check_panel_captures(config, root='.', progress=None):
     """
     Measure and check the panel captures without correcting anything, for the table of the UI (progress: as in run)
     Outputs: (rows, the flags): one row per panel capture {'capture', 'time', 'moment', 'heading', 'orientation', 'used',
-             'departure' (the largest of its moment, or None), 'band', 'flag' (text, '' when nothing is wrong)}
+             'departure' (its largest from the median of its moment, with three or more captures, or None), 'spread' (the
+             largest spread of the two captures of its moment, or None), 'band', 'alone' (the only capture of its
+             moment), 'flag' (text, '' when nothing is wrong; see panel_capture_flag)}
     """
     config = merge_config(config)
     levels, _ = panel_reflectance_levels(config, root)
-    images_folder = resolve_path(root, config['INPUTS.images_folder'])
+    images_folder = images_source(config, root)
     flight_names = captures_to_correct(config, rct.list_capture_names(images_folder, config['INPUTS.file_pattern']))
     result = {'panel': {}, 'flags': []}
     use_dls = config['CORRECTION.use_dls'] and config['INPUTS.output_product'] == 'panel_reflectance'
@@ -1305,22 +1363,32 @@ def check_panel_captures(config, root='.', progress=None):
     for moment in ('before', 'after'):
         record = result['panel'].get(moment, {})
         for name, item in record.get('captures', {}).items():
-            departure, band, flag = None, None, ''
-            item = dict(item, moment=moment)
+            departure, spread, band = None, None, None
             if name in record.get('departures', {}):
                 band, departure = max(record['departures'][name].items(), key=lambda pair: abs(pair[1]))
-                if abs(departure) > limit:
-                    flag = f"departs more than {100 * limit:g} % from the others"
             elif record.get('spread') and len(record['captures']) == 2:
                 band, spread = max(record['spread'].items(), key=lambda pair: pair[1])
-                if spread > limit:
-                    flag = f"the two captures of this moment disagree {100 * spread:.1f} %"
-            if not item['used']:
-                flag = 'not used: another orientation was chosen'
-            rows.append({'capture': name, 'time': item['time'], 'moment': moment, 'heading': item['heading'],
-                         'orientation': ORIENTATION_TEXT[item['orientation']], 'used': item['used'],
-                         'departure': departure, 'band': band, 'flag': flag})
+            row = {'capture': name, 'time': item['time'], 'moment': moment, 'heading': item['heading'],
+                   'orientation': ORIENTATION_TEXT[item['orientation']], 'used': item['used'], 'departure': departure,
+                   'spread': spread, 'band': band, 'alone': len(record['captures']) == 1}
+            row['flag'] = panel_capture_flag(row, limit)
+            rows.append(row)
     return rows, result['flags']
+
+
+def panel_capture_flag(row, limit):
+    """
+    The flag of a row of check_panel_captures under a spread limit (CHECKS.panel_capture_spread_tolerance), '' when nothing
+    is wrong: a capture of three or more that departs from the median of its moment, the two captures of a moment that
+    disagree, or a capture of an orientation that is not used
+    """
+    if not row['used']:
+        return 'not used: another orientation was chosen'
+    if row['departure'] is not None and abs(row['departure']) > limit:
+        return f"departs more than {100 * limit:g} % from the others"
+    if row['spread'] is not None and row['spread'] > limit:
+        return f"the two captures of this moment disagree {100 * row['spread']:.1f} %"
+    return ''
 
 
 def adjacent_panel_shares(panels, image, name):
@@ -1452,7 +1520,7 @@ def dls_only_panel_check(panels):
 
 
 def _run_stages(config, root, results_folder, result, progress):
-    images_folder = resolve_path(root, config['INPUTS.images_folder'])
+    images_folder = images_source(config, root)
     exiftool_path = exiftool_executable(config, root)
     ignored = capture_names(config['INPUTS.ignored_bands'])
     before_names, after_names = panel_capture_groups(config)

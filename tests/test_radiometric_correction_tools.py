@@ -95,6 +95,37 @@ class FilePatternTests(unittest.TestCase):
         with self.assertRaisesRegex(FileNotFoundError, "'IMG_9'.*pattern"):
             rct.find_capture_paths(self.folder.name, 'IMG_9')
 
+    def test_several_folders_are_read_as_one_and_a_repeated_capture_uses_the_copy_chosen(self):
+        flight, panels = Path(self.folder.name) / 'flight', Path(self.folder.name) / 'panels'
+        flight.mkdir()
+        panels.mkdir()
+        for folder, names in ((flight, ('IMG_0005_1.tif', 'IMG_0005_2.tif', 'IMG_0010_1.tif', 'IMG_0010_2.tif')),
+                              (panels, ('IMG_0003_1.tif', 'IMG_0005_1.tif', 'IMG_0005_2.tif'))):
+            for name in names:
+                (folder / name).write_bytes(b'')
+        self.assertEqual(rct.folder_list(f"{flight} | {panels} | {flight}"), [str(flight), str(panels)])
+        self.assertEqual(rct.folder_list([flight, '']), [str(flight)])
+        self.assertEqual(rct.folder_list(''), [])
+        both = [str(flight), str(panels)]
+        self.assertEqual(rct.list_capture_names(both), ['IMG_0003', 'IMG_0005', 'IMG_0010'])     # once each
+        self.assertEqual(list(rct.repeated_captures(both)), ['IMG_0005'])
+        self.assertEqual(list(rct.repeated_captures(both)['IMG_0005']), [flight, panels])
+        self.assertEqual(rct.unresolved_captures(both), ['IMG_0005'])
+        self.assertEqual(rct.unresolved_captures(both, names=['IMG_0010']), [])                # only those used
+        with self.assertRaisesRegex(ValueError, "'IMG_0005' is in more than one images folder"):
+            rct.find_capture_paths(both, 'IMG_0005')
+        self.assertEqual(Path(rct.find_capture_paths(both, 'IMG_0003')[0]).parent, panels)
+        chosen = rct.ImageFolders(both, {'IMG_0005': panels, 'IMG_0010': flight})               # IMG_0010 is not repeated
+        self.assertEqual(rct.unresolved_captures(chosen), [])
+        self.assertEqual([Path(path).parent for path in rct.find_capture_paths(chosen, 'IMG_0005')], [panels, panels])
+        self.assertEqual(rct.list_capture_names(chosen), ['IMG_0003', 'IMG_0005', 'IMG_0010'])
+        elsewhere = rct.ImageFolders(both, {'IMG_0005': Path(self.folder.name)})                # not one of the copies
+        self.assertEqual(rct.unresolved_captures(elsewhere), ['IMG_0005'])
+        info = rct.preview_file_pattern(chosen)
+        self.assertEqual((info['files'], info['matched'], info['captures']), (7, 7, 3))
+        self.assertEqual(info['files_per_capture'], {1: 1, 2: 3})                               # each copy counted once
+        self.assertEqual(str(chosen), f"{flight} | {panels}")
+
     def test_a_template_is_read_like_the_regular_expression_it_stands_for(self):
         self.touch('IMG_0001_1.tif', 'IMG_0001_2.TIF', 'IMG_0002_1.tif', 'DJI_0001_MS_G.TIF', 'DJI_0001_MS_R.TIF', 'x.txt')
         self.assertEqual(rct.list_capture_names(self.folder.name, '{capture}_{index}.tif'), ['IMG_0001', 'IMG_0002'])

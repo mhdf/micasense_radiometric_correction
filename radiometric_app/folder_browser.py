@@ -4,11 +4,17 @@ right, a picture of the image file that is selected, so that the folder of the r
 recognized before it is chosen.
 
     ask_folder(parent, title, initialdir)   the dialog; returns the path of the folder that was chosen, or '' if cancelled
+    ask_folders(parent, title, initialdir, folders, chosen, pattern)
+                                            the dialog that builds a list of folders, from any location, and chooses the
+                                            copy used of each capture that is in more than one of them (with its picture);
+                                            returns ([folders], {capture: folder}) or None if cancelled
 
 What does not need a window is tested without a display:
     list_folder(destination)    the contents of a folder, sorted
     preview_picture(path)       a picture of an image file (stretched between its 1 % and 99.5 % percentiles)
     size_text(size)             a size in bytes as text
+    identical_copies(copies)    whether the copies of a repeated capture have the same files
+    valid_choices(groups, chosen)   the choices that name one of the copies of a repeated capture
 """
 
 # Standard Library Imports
@@ -298,7 +304,7 @@ class FolderBrowser(tk.Toplevel):
         self.selection = tk.StringVar(self)
         summary_label = ttk.Label(body, textvariable=self.summary, style='Muted.TLabel')
         selection_label = ttk.Label(body, textvariable=self.selection, wraplength=width - 45)
-        actions = ttk.Frame(body)
+        self.actions = actions = ttk.Frame(body)
         self.accept_button = ttk.Button(actions, text='Select Folder', command=self.accept)
         self.accept_button.pack(side='right')
         ttk.Button(actions, text='Cancel', command=self.cancel).pack(side='right', padx=(0, 6))
@@ -400,6 +406,346 @@ class FolderBrowser(tk.Toplevel):
 def ask_folder(parent, title, initialdir):
     """ Open the window above another one and wait; the folder that was chosen as text, or '' if it was cancelled """
     dialog = FolderBrowser(parent, title, initialdir)
+    dialog.deiconify()
+    dialog.wait_visibility()
+    dialog.grab_set()
+    dialog.tree.focus_set()
+    parent.wait_window(dialog)
+    return dialog.result
+
+
+# ======================================================================================
+# SEVERAL FOLDERS AND THEIR REPEATED CAPTURES
+# ======================================================================================
+
+def identical_copies(copies):
+    """
+    Whether each copy of a repeated capture has the same files as every other copy: the same names and the same bytes
+    copies: {folder: [paths]}, as rct.repeated_captures gives them. Outputs: {folder: True / False}
+    """
+    import filecmp
+    files = {folder: {Path(path).name: path for path in paths} for folder, paths in copies.items()}
+    return {folder: all(set(own) == set(other) and
+                        all(filecmp.cmp(own[name], other[name], shallow=False) for name in own)
+                        for folder_other, other in files.items() if folder_other != folder)
+            for folder, own in files.items()}
+
+
+def distinct_paths(folders):
+    """ Each folder written from where the folders part: [.../survey/raw, .../calibration/raw] -> ['…\\survey\\raw', ...] """
+    folders = [Path(os.path.abspath(folder)) for folder in folders]
+    try:
+        common = Path(os.path.commonpath(folders)) if len(folders) > 1 else None
+    except ValueError:                                          # on different drives
+        common = None
+    if common is None or any(folder == common for folder in folders):
+        return [str(folder) for folder in folders]
+    return [os.path.join('…', os.path.relpath(folder, common)) for folder in folders]
+
+
+def valid_choices(groups, chosen):
+    """ {capture: folder} of the choices that name one of the copies of a repeated capture (the others are dropped) """
+    valid = {}
+    for name, copies in groups.items():
+        target = chosen.get(name)
+        folder = next((folder for folder in copies
+                       if target is not None and os.path.normcase(os.path.abspath(folder)) ==
+                       os.path.normcase(os.path.abspath(target))), None)
+        if folder is not None:
+            valid[name] = folder
+    return valid
+
+
+class RepeatedCapturesDialog(tk.Toplevel):
+    """ Choose the folder whose copy is used, for each capture that is in more than one folder; no file is changed """
+
+    def __init__(self, parent, groups, chosen=None):
+        super().__init__(parent)
+        self.withdraw()
+        self.title('Choose the copy of each repeated capture')
+        self.transient(parent)
+        self.groups = groups
+        self.names = list(groups)
+        self.choices = valid_choices(groups, chosen or {})
+        self.copies = []
+        self.result = None
+        self.configure(background=COLORS['background'])
+        self.minsize(760, 520)
+        self.geometry(f"{min(1180, self.winfo_screenwidth() - 60)}x{min(720, self.winfo_screenheight() - 100)}")
+        self.protocol('WM_DELETE_WINDOW', self.cancel)
+        self.bind('<Escape>', lambda event: self.cancel())
+
+        body = ttk.Frame(self, padding=14)
+        body.pack(fill='both', expand=True)
+        ttk.Label(body, text='Choose which folder supplies each repeated capture.', style='Heading.TLabel').pack(anchor='w')
+        guidance = ttk.Label(body, text="The capture is used with all the files of the copy that is chosen; the other "
+                             "copies are left out of the processing. No file is moved or deleted. A repeated name does not "
+                             "mean the same images: the Contents column says whether the files of the copies are "
+                             "identical.", wraplength=1080)
+        guidance.pack(fill='x', pady=(6, 10))
+        self.status = tk.StringVar(self)
+        status = ttk.Label(body, textvariable=self.status, style='Muted.TLabel', wraplength=1080)
+        status.pack(side='bottom', fill='x', pady=(6, 0))
+        actions = ttk.Frame(body)
+        actions.pack(side='bottom', fill='x', pady=(8, 0))
+        ttk.Button(actions, text='Use this copy', command=self.keep).pack(side='left')
+        ttk.Button(actions, text='Use this folder for the remaining captures', command=self.keep_remaining).pack(
+            side='left', padx=(6, 0))
+        ttk.Button(actions, text='Use choices', command=self.accept).pack(side='right')
+        ttk.Button(actions, text='Cancel', command=self.cancel).pack(side='right', padx=6)
+
+        panes = tk.PanedWindow(body, orient='horizontal', sashwidth=6, sashrelief='flat', borderwidth=0,
+                               background=COLORS['border'], opaqueresize=True)
+        panes.pack(fill='both', expand=True)
+        left = ttk.Frame(panes)
+        panes.add(left, minsize=220, width=290, stretch='never')
+        left.rowconfigure(0, weight=1)
+        left.columnconfigure(0, weight=1)
+        self.captures = ttk.Treeview(left, columns=('capture', 'choice'), show='headings', selectmode='browse')
+        for key, title, width in (('capture', 'Capture', 115), ('choice', 'Copy used', 150)):
+            self.captures.heading(key, text=title, anchor='w')
+            self.captures.column(key, width=width, minwidth=70, stretch=True)
+        self.captures.grid(row=0, column=0, sticky='nsew')
+        scroll = ttk.Scrollbar(left, orient='vertical', command=self.captures.yview)
+        scroll.grid(row=0, column=1, sticky='ns')
+        self.captures.configure(yscrollcommand=scroll.set)
+        right = ttk.Frame(panes)
+        panes.add(right, minsize=400, stretch='always')
+        right.columnconfigure(0, weight=1)
+        right.rowconfigure(3, weight=1)
+        ttk.Label(right, text='Copies in the folders').grid(row=0, column=0, sticky='w')
+        self.sources = ttk.Treeview(right, columns=('folder', 'files', 'contents'), show='headings', selectmode='browse',
+                                    height=4)
+        for key, title, width in (('folder', 'Folder (the part that differs)', 300), ('files', 'Files', 50),
+                                  ('contents', 'Contents', 210)):
+            self.sources.heading(key, text=title, anchor='w')
+            self.sources.column(key, width=width, minwidth=45, stretch=key == 'folder')
+        self.sources.grid(row=1, column=0, sticky='nsew', pady=(6, 0))
+        self.copy_path = tk.StringVar(self)
+        path_label = ttk.Label(right, textvariable=self.copy_path, style='Muted.TLabel', wraplength=600)
+        path_label.grid(row=2, column=0, sticky='ew', pady=(4, 0))
+        right.bind('<Configure>', lambda event: path_label.configure(wraplength=max(200, event.width - 4)), add='+')
+        self.preview = ImagePreview(right)
+        self.preview.grid(row=3, column=0, sticky='nsew', pady=(8, 0))
+        for index, name in enumerate(self.names):
+            self.captures.insert('', 'end', iid=str(index), values=(name, self._choice_text(name)))
+        self.captures.bind('<<TreeviewSelect>>', self.select_capture)
+        self.sources.bind('<<TreeviewSelect>>', self.preview_copy)
+        body.bind('<Configure>', lambda event: (guidance.configure(wraplength=max(300, event.width - 4)),
+                                                status.configure(wraplength=max(300, event.width - 4))), add='+')
+        hide_title_icon(self)
+        if self.names:
+            self.captures.selection_set('0')
+            self.select_capture()
+
+    def _choice_text(self, name):
+        folder = self.choices.get(name)
+        return Path(folder).name if folder is not None else 'Choose a copy'
+
+    def current_name(self):
+        selected = self.captures.selection()
+        return self.names[int(selected[0])] if selected else None
+
+    def selected_copy(self):
+        selected = self.sources.selection()
+        return self.copies[int(selected[0])] if selected else None
+
+    def select_capture(self, event=None):
+        name = self.current_name()
+        if name is None:
+            return
+        copies = self.groups[name]
+        self.copies = list(copies)
+        try:
+            same = identical_copies(copies)
+        except OSError:
+            same = {}
+        self.sources.delete(*self.sources.get_children())
+        shown = distinct_paths(self.copies)
+        for index, folder in enumerate(self.copies):
+            contents = ('' if folder not in same else
+                        'Identical files' if same[folder] else 'Different files')
+            self.sources.insert('', 'end', iid=str(index), values=(shown[index], len(copies[folder]), contents))
+        chosen = self.choices.get(name)
+        self.sources.selection_set(str(self.copies.index(chosen) if chosen in self.copies else 0))
+        self.preview_copy()
+        self.update_status()
+
+    def preview_copy(self, event=None):
+        name, folder = self.current_name(), self.selected_copy()
+        self.copy_path.set(f"Selected copy: {folder}" if folder is not None else '')
+        if name is not None and folder is not None:
+            self.preview.show(sorted(self.groups[name][folder], key=lambda path: Path(path).name)[0])
+
+    def keep(self):
+        """ The selected copy is the one used; the next capture without a choice is shown """
+        name, folder = self.current_name(), self.selected_copy()
+        if name is None or folder is None:
+            return
+        self.choices[name] = folder
+        self.captures.set(str(self.names.index(name)), 'choice', self._choice_text(name))
+        waiting = next((index for index, item in enumerate(self.names) if item not in self.choices), None)
+        if waiting is not None:
+            self.captures.selection_set(str(waiting))
+            self.captures.see(str(waiting))
+            self.select_capture()
+        self.update_status()
+
+    def keep_remaining(self):
+        """ The folder of the selected copy supplies every capture without a choice that has a copy there """
+        folder = self.selected_copy()
+        if folder is None:
+            return
+        for index, name in enumerate(self.names):
+            if name not in self.choices and folder in self.groups[name]:
+                self.choices[name] = folder
+                self.captures.set(str(index), 'choice', self._choice_text(name))
+        self.update_status()
+
+    def update_status(self):
+        self.status.set(f"{len(self.choices)} of {len(self.groups)} repeated captures have a copy chosen. Select a "
+                        "capture to see its copies; Use choices keeps them.")
+
+    def accept(self):
+        from tkinter import messagebox
+        waiting = [name for name in self.names if name not in self.choices]
+        if waiting:
+            messagebox.showerror('Choose a copy for every repeated capture',
+                                 f"No copy chosen for: {', '.join(waiting)}", parent=self)
+            return
+        self.result = {name: str(folder) for name, folder in self.choices.items()}
+        self.destroy()
+
+    def cancel(self):
+        self.result = None
+        self.destroy()
+
+
+def ask_repeated_captures(parent, groups, chosen=None):
+    """ Open the dialog above another window and wait; {capture: folder} of the choices, or None if it was cancelled """
+    previous = parent.grab_current()
+    try:
+        dialog = RepeatedCapturesDialog(parent, groups, chosen)
+        dialog.deiconify()
+        dialog.wait_visibility()
+        dialog.grab_set()
+        parent.wait_window(dialog)
+        return dialog.result
+    finally:
+        if previous is not None and previous.winfo_exists():
+            previous.grab_set()
+
+
+class FoldersBrowser(FolderBrowser):
+    """ The folder browser that builds a list of folders, from any location, and chooses the copy of repeated captures """
+
+    def __init__(self, parent, title, initialdir, folders=(), chosen=None, pattern=None):
+        self.folders = []
+        super().__init__(parent, title, initialdir)
+        self.chosen = dict(chosen or {})
+        self.pattern = pattern
+        self.result = None
+        self.geometry(f"{min(1100, self.winfo_screenwidth() - 60)}x{min(740, self.winfo_screenheight() - 100)}")
+        self.tree.configure(selectmode='extended')
+        self.accept_button.configure(text='Use selected folders')
+        ttk.Button(self.actions, text='Add selected / current folders', command=self.add_folders).pack(side='left')
+        ttk.Button(self.actions, text='Remove', command=self.remove_folders).pack(side='left', padx=(6, 0))
+        ttk.Button(self.actions, text='Clear list', command=lambda: self.set_folders([])).pack(side='left', padx=(6, 0))
+        ttk.Button(self.actions, text='Review repeated captures...', command=lambda: self.review(force=True)).pack(
+            side='left', padx=(6, 0))
+        basket = ttk.Frame(self.actions.master)
+        basket.pack(side='bottom', before=self.panes, fill='x', pady=(8, 4))
+        basket.columnconfigure(0, weight=1)
+        self.folder_list = ttk.Treeview(basket, columns=('path',), show='headings', selectmode='extended', height=3)
+        self.folder_list.column('path', width=700, minwidth=150, stretch=True)
+        self.folder_list.grid(row=0, column=0, sticky='nsew')
+        vertical = ttk.Scrollbar(basket, orient='vertical', command=self.folder_list.yview)
+        vertical.grid(row=0, column=1, sticky='ns')
+        self.folder_list.configure(yscrollcommand=vertical.set)
+        self.folder_list.bind('<Delete>', lambda event: self.remove_folders())
+        self.set_folders(folders)
+
+    def set_folders(self, folders):
+        """ The list of folders (each once, in the order given) """
+        from radiometric_correction_tools import folder_list
+        self.folders = [Path(os.path.abspath(folder)) for folder in folder_list(list(folders))]
+        self.folder_list.delete(*self.folder_list.get_children())
+        for index, folder in enumerate(self.folders):
+            self.folder_list.insert('', 'end', iid=str(index), values=(str(folder),))
+        self.folder_list.heading('path', text=f"Folders to use ({len(self.folders)})", anchor='w')
+        self.accept_button.state(['!disabled'] if self.folders else ['disabled'])
+
+    def _selection_changed(self, event=None):
+        super()._selection_changed(event)
+        self.selection.set("Ctrl/Shift selects several folders. Add them to the list, then open another location to add "
+                           "more. Selecting an image shows its picture.")
+
+    def add_folders(self):
+        """ The folders selected in the listing or, when none is, the one that is open """
+        if self.location.get().strip().strip('"') != str(self.current):
+            if not self.navigate(self.location.get()):
+                return
+        selected = [self.entries[key][0] for key in self.tree.selection() if key in self.entries and self.entries[key][1]]
+        self.set_folders([*self.folders, *(selected or [self.current])])
+
+    def remove_folders(self):
+        selected = {int(key) for key in self.folder_list.selection()}
+        self.set_folders([folder for index, folder in enumerate(self.folders) if index not in selected])
+
+    def review(self, force=False):
+        """
+        Choose the copy of the repeated captures of the folders of the list: always with force, else only when a repeated
+        capture has no choice. False if it was cancelled or the folders cannot be read
+        """
+        from tkinter import messagebox
+        from radiometric_correction_tools import ImageFolders, repeated_captures
+        try:
+            groups = repeated_captures(ImageFolders(self.folders), self.pattern)
+        except (OSError, ValueError) as error:
+            messagebox.showerror('Review repeated captures', str(error), parent=self)
+            return False
+        choices = valid_choices(groups, self.chosen)
+        if not groups:
+            self.chosen = {}
+            if force:
+                messagebox.showinfo('Review repeated captures', 'No capture is in more than one of the folders.',
+                                    parent=self)
+            return True
+        if force or len(choices) < len(groups):
+            answer = ask_repeated_captures(self, groups, choices)
+            if answer is None:
+                return False
+            choices = answer
+        self.chosen = {name: str(folder) for name, folder in choices.items()}
+        self.folder_list.heading('path', text=f"Folders to use ({len(self.folders)}); {len(groups)} repeated "
+                                 "captures, copy chosen", anchor='w')
+        return True
+
+    def accept(self):
+        from tkinter import messagebox
+        if not self.folders:
+            return
+        missing = [folder for folder in self.folders if not folder.is_dir()]
+        if missing:
+            messagebox.showerror('Folder unavailable', 'These folders do not exist:\n' +
+                                 '\n'.join(str(folder) for folder in missing), parent=self)
+            return
+        if not self.review():
+            return
+        self.result = ([str(folder) for folder in self.folders], self.chosen)
+        self.destroy()
+
+    def cancel(self):
+        self.result = None
+        self.destroy()
+
+
+def ask_folders(parent, title, initialdir, folders=(), chosen=None, pattern=None):
+    """
+    Open the browser of several folders above another window and wait
+    Outputs: ([folders], {capture: folder of the copy used} of the repeated captures), or None if it was cancelled
+    """
+    dialog = FoldersBrowser(parent, title, initialdir, folders, chosen, pattern)
     dialog.deiconify()
     dialog.wait_visibility()
     dialog.grab_set()

@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "MicaSense Radiometric Correction"
+abstract: >-
+  Converts raw images of MicaSense multispectral cameras into reflectance, or into radiance, using the reference panel
+  and, optionally, the Downwelling Light Sensor (DLS) data, through a user interface, a workflow runner or a Python
+  library. Tested with the RedEdge-P.
+authors:
+  - family-names: Franceschini
+    given-names: Marston H. D.
+    orcid: "https://orcid.org/0000-0002-1295-4798"
+version: 0.9.0
+license: MIT
+repository-code: "https://github.com/mhdf/micasense_radiometric_correction"
+url: "https://mhdf.github.io/micasense_radiometric_correction/"
+keywords:
+  - MicaSense
+  - multispectral
+  - radiometric correction
+  - reflectance
+  - remote sensing
+  - UAV
+references:
+  - type: software
+    title: "MicaSense RedEdge and Altum Image Processing Tutorials"
+    authors:
+      - name: "MicaSense, Inc."
+    repository-code: "https://github.com/micasense/imageprocessing"
+    license: MIT

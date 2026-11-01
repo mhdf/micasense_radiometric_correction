@@ -22,11 +22,11 @@ reference_panel_spectral_response/ the spectral response (reflectance by wavelen
 results/                          what the program writes (not kept in git)
 ```
 
-&emsp;&emsp;The commands in the guide are run from the project folder (the one with `radiometric_correction_tools.py`), for example `python -m radiometric_app.radiometric_window`. `radiometric_app` can be copied into another program together with `radiometric_correction_tools.py` (the modules of the folder import each other with relative imports).
+The commands in the guide are run from the project folder (the one with `radiometric_correction_tools.py`), for example `python -m radiometric_app.radiometric_window`. `radiometric_app` can be copied into another program together with `radiometric_correction_tools.py` (the modules of the folder import each other with relative imports).
 
 ## The website of the documentation
 
-&emsp;&emsp;GitHub Pages publishes the README (the home page) and the pages of `docs/` as a website, built by GitHub from the branch `main` (Settings > Pages > Deploy from a branch > `main`, `/ (root)`) every time it changes. `_config.yml` chooses the theme (Just the Docs), leaves out the program, the tests and the images, and gives each page its title and its place in the side bar: a new page of `docs/` needs a line there, in the order of the table of the README (a test checks it). The Markdown files have no front matter, so they read the same on GitHub; the links between them are converted to the pages of the website.
+GitHub Pages publishes the README (the home page) and the pages of `docs/` as a website, built by GitHub from the branch `main` (Settings > Pages > Deploy from a branch > `main`, `/ (root)`) every time it changes. `_config.yml` chooses the theme (Just the Docs), leaves out the program, the tests and the images, and gives each page its title and its place in the side bar: a new page of `docs/` needs a line there, in the order of the table of the README (a test checks it). The Markdown files have no front matter, so they read the same on GitHub; the links between them are converted to the pages of the website.
 
 ## How the UI is built
 
@@ -40,6 +40,6 @@ results/                          what the program writes (not kept in git)
 python -m unittest discover -s tests -t . -v
 ```
 
-&emsp;&emsp;The tests use the example images and need ExifTool (set the environment variable `exiftoolpath` if it is not in the PATH). The tests of the UI need a display and are skipped without one. `tests/test_readme.py` checks the documentation: the contents list of the README has every section in order, every link of the README and of the pages of `docs` reaches an existing file and heading, and the images exist.
+The tests use the example images and need ExifTool (set the environment variable `exiftoolpath` if it is not in the PATH). The tests of the UI need a display and are skipped without one. `tests/test_readme.py` checks the documentation: the contents list of the README has every section in order, every link of the README and of the pages of `docs` reaches an existing file and heading, and the images exist.
 
 </div>

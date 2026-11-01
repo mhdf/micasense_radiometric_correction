@@ -58,6 +58,17 @@ class ConfigModelTests(unittest.TestCase):
         self.assertEqual(config['PANEL.saturation_threshold'], 65000)
         self.assertEqual(model.overrides(), {'PANEL.percent_inner_area': 0.5})
 
+    def test_one_images_folder_is_saved_as_a_path_and_several_as_a_list(self):
+        model = rw.ConfigModel({'INPUTS.images_folder': ['a/raw', 'b/raw'],
+                                'INPUTS.repeated_capture_folders': {'IMG_0005': 'b/raw'}})
+        self.assertEqual(model.get('INPUTS.images_folder'), 'a/raw | b/raw')
+        self.assertEqual(model.config()[0]['INPUTS.images_folder'], ['a/raw', 'b/raw'])
+        self.assertEqual(model.config()[0]['INPUTS.repeated_capture_folders'], {'IMG_0005': 'b/raw'})
+        model.set('INPUTS.images_folder', ' a/raw | ')
+        self.assertEqual(model.config()[0]['INPUTS.images_folder'], 'a/raw')
+        model.set('INPUTS.repeated_capture_folders', '{not json')
+        self.assertIn('INPUTS.repeated_capture_folders', model.config()[1])
+
     def test_an_integer_typed_with_a_decimal_point_is_accepted(self):
         model = rw.ConfigModel()
         model.set('PANEL.saturation_threshold', '60000.0')
@@ -248,16 +259,23 @@ class WindowTests(unittest.TestCase):
     def test_a_folder_is_chosen_in_the_window_with_the_picture_of_the_images_and_a_file_in_the_dialog_of_the_system(self):
         images = Path(self.folder.name) / 'flight' / 'raw'
         images.mkdir(parents=True)
+        panels = Path(self.folder.name) / 'panels'
         self.frame.set_value('INPUTS.images_folder', str(images))
-        with mock.patch('radiometric_app.folder_browser.ask_folder', return_value=str(images.parent)) as ask:
-            self.frame._browse('INPUTS.images_folder', 'folder')
+        answer = ([str(images), str(panels)], {'IMG_0005': str(panels)})
+        with mock.patch('radiometric_app.folder_browser.ask_folders', return_value=answer) as ask:
+            self.frame._browse('INPUTS.images_folder', 'folders')
         arguments = ask.call_args[0]
-        self.assertEqual((arguments[1], arguments[2]), ('Images folder', images))
+        self.assertEqual(arguments[1:], ('Images folder', images, [images], {}, rct_pattern()))
         self.assertIs(arguments[0], self.frame.parent.winfo_toplevel())
-        self.assertEqual(self.frame.variables['INPUTS.images_folder'].get(), str(images.parent))
-        with mock.patch('radiometric_app.folder_browser.ask_folder', return_value='') as ask:       # cancelled: nothing changes
-            self.frame._browse('INPUTS.images_folder', 'folder')
-        self.assertEqual(self.frame.variables['INPUTS.images_folder'].get(), str(images.parent))
+        self.assertEqual(self.frame.variables['INPUTS.images_folder'].get(), f"{images} | {panels}")
+        config = self.frame.model.config()[0]
+        self.assertEqual(config['INPUTS.images_folder'], [str(images), str(panels)])
+        self.assertEqual(config['INPUTS.repeated_capture_folders'], {'IMG_0005': str(panels)})
+        with mock.patch('radiometric_app.folder_browser.ask_folders', return_value=None) as ask:    # cancelled: nothing changes
+            self.frame._browse('INPUTS.images_folder', 'folders')
+        self.assertEqual(ask.call_args[0][3:5], ([images, panels], {'IMG_0005': str(panels)}))     # what is there is shown
+        self.assertEqual(self.frame.variables['INPUTS.images_folder'].get(), f"{images} | {panels}")
+        self.frame.set_value('INPUTS.images_folder', str(images.parent))
         missing = Path(self.folder.name) / 'not_yet' / 'results'                                    # it does not exist yet
         self.frame.set_value('INPUTS.results_folder', str(missing))
         with mock.patch('radiometric_app.folder_browser.ask_folder', return_value='') as ask:
@@ -445,10 +463,13 @@ class WindowTests(unittest.TestCase):
         self.assertIn('70 % of its width and of its height (49 % of its area)', text)
         self.assertIn('# Why not all of it', text)
         self.assertIn('exactly as it was saved', text)
-        save, profile = rw.PROFILE_NOTES['save'][1], rw.PROFILE_NOTES['profile'][1]
+        save, profile = rw.PROFILE_NOTES['save'][1], rw.PROFILE_NOTES['save_profile'][1]
         self.assertIn('done by itself when you run', save)
         self.assertIn('Running does not make a profile', profile)
         self.assertIn('radiometric_result.json', profile)
+        load = rw.PROFILE_NOTES['load_profile'][1]
+        for name in ('radiometric_result.json', '<capture>_provenance.json', 'panel_regions.json'):
+            self.assertIn(name, load)
 
     def test_the_inner_area_of_the_tool_is_kept_in_the_configuration(self):
         from radiometric_app.panel_selector import SelectionResults
@@ -756,7 +777,7 @@ class WindowTests(unittest.TestCase):
         self.assertIn('was not loaded', self.frame.status.cget('text'))
         self.assertIn('OLD.key', self.frame.status.cget('text'))
         self.assertEqual(self.frame.model.raw, before)
-        notes = rw.PROFILE_NOTES['profile'][1]
+        notes = rw.PROFILE_NOTES['load_profile'][1]
         self.assertIn('radiometric_result.json of a past run', notes)
 
     def test_a_profile_saves_every_value_and_restores_them(self):
@@ -1000,7 +1021,8 @@ class WindowTests(unittest.TestCase):
         for key in keys:
             self.assertIn(key, self.frame.variables)
         for key in keys[1:]:
-            self.assertTrue(self.inside(self.frame.entries[key], 'CORRECTION'), key)
+            if key != 'CHECKS.panel_capture_spread_tolerance':                  # set in the table of the panel captures
+                self.assertTrue(self.inside(self.frame.entries[key], 'CORRECTION'), key)
         self.assertNotIn('CHECKS', self.frame.pages)
 
     def test_the_dls_page_has_a_heading_for_each_part(self):
@@ -1255,10 +1277,11 @@ class WindowTests(unittest.TestCase):
 
     def test_the_panel_captures_are_checked_in_a_table_and_can_be_left_out(self):
         rows = [{'capture': 'IMG_0005', 'time': '2023:02:02 13:26:38', 'moment': 'before', 'heading': 87.0,
-                 'orientation': 'with the sun at the side', 'used': True, 'departure': -0.05, 'band': 'Red',
-                 'flag': 'departs more than 2 % from the others'},
+                 'orientation': 'with the sun at the side', 'used': True, 'departure': -0.05, 'spread': None,
+                 'band': 'Red', 'alone': False, 'flag': 'departs more than 2 % from the others'},
                 {'capture': 'IMG_0422', 'time': '2023:02:02 13:48:36', 'moment': 'after', 'heading': 83.0,
-                 'orientation': 'with the sun at the side', 'used': True, 'departure': None, 'band': None, 'flag': ''}]
+                 'orientation': 'with the sun at the side', 'used': True, 'departure': None, 'spread': None, 'band': None,
+                 'alone': True, 'flag': ''}]
         self.frame.set_value('INPUTS.reference_panel_capture', 'IMG_0005, IMG_0422')
         self.frame._show_panel_check(rows, [])
         window = self.frame.panel_check_window
@@ -1266,6 +1289,18 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(tree.get_children(), ('IMG_0005', 'IMG_0422'))
         self.assertEqual(tree.item('IMG_0005')['values'][4], '-5.0 % (Red)')
         self.assertEqual(tree.item('IMG_0005')['tags'], ['flagged'])
+        texts = [child.cget('text') for child in window.winfo_children()[0].winfo_children()
+                 if child.winfo_class() == 'TLabel']
+        self.assertTrue(any('IMG_0422 is the only panel capture after the flight' in text for text in texts), texts)
+        self.assertNotIn('CHECKS.panel_capture_spread_tolerance', self.frame.entries)   # not on the DLS page
+        self.frame.panel_check_limit.set('10')                                  # the limit is changed in the table
+        self.assertEqual(tree.item('IMG_0005')['tags'], '')
+        self.assertEqual(tree.set('IMG_0005', 'flag'), '')
+        self.assertEqual(self.frame.model.config()[0]['CHECKS.panel_capture_spread_tolerance'], 0.1)   # and in the run
+        self.frame.panel_check_limit.set('1')
+        self.assertEqual(tree.set('IMG_0005', 'flag'), 'departs more than 1 % from the others')
+        self.frame.panel_check_limit.set('x')                                   # what is not a number changes nothing
+        self.assertEqual(self.frame.model.config()[0]['CHECKS.panel_capture_spread_tolerance'], 0.01)
         self.frame.leave_out_panel_captures(['IMG_0005'])
         config = self.frame.model.config()[0]
         self.assertEqual(config['INPUTS.reference_panel_capture'], 'IMG_0422')
@@ -1474,6 +1509,15 @@ class HelpColumnTests(unittest.TestCase):
             self.root.update()
             time.sleep(0.02)
         self.assertEqual(panel.shown[0], 'Inputs')
+
+    def test_the_buttons_at_the_bottom_are_explained_under_the_pointer(self):
+        panel = self.frame.help_panel
+        self.root.update()
+        for key, title in (('load_profile', 'Load profile...'), ('save_profile', 'Save profile...'),
+                           ('save', 'Update saved configuration')):
+            self.frame.buttons[key].event_generate('<Motion>', x=3, y=3)     # as the mouse does, through the window
+            self.root.update()
+            self.assertEqual(panel.shown[0], title)
 
     def test_the_explanation_stays_while_the_pointer_is_over_the_column(self):
         panel = self.frame.help_panel

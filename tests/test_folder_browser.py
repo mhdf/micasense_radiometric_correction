@@ -124,6 +124,37 @@ class LogicTests(unittest.TestCase):
             fb.preview_picture(self.tree / 'notes.txt')
 
 
+def make_copies(folder):
+    """ flight/ and panels/, both with the capture IMG_0005 (the same files), and IMG_0007 in both with different files """
+    flight, panels = Path(folder) / 'flight', Path(folder) / 'panels'
+    for target in (flight, panels):
+        target.mkdir()
+        for index in (1, 2):
+            tifffile.imwrite(target / f'IMG_0005_{index}.tif', np.full((8, 8), index, dtype=np.uint16))
+    tifffile.imwrite(flight / 'IMG_0007_1.tif', np.zeros((8, 8), dtype=np.uint16))
+    tifffile.imwrite(panels / 'IMG_0007_1.tif', np.ones((8, 8), dtype=np.uint16))
+    tifffile.imwrite(flight / 'IMG_0010_1.tif', np.zeros((8, 8), dtype=np.uint16))
+    return flight, panels
+
+
+class RepeatedCaptureTests(unittest.TestCase):
+
+    def test_the_copies_are_compared_by_their_bytes_and_only_choices_of_a_copy_are_kept(self):
+        import radiometric_correction_tools as rct
+        with tempfile.TemporaryDirectory() as folder:
+            flight, panels = make_copies(folder)
+            groups = rct.repeated_captures([flight, panels])
+            self.assertEqual(list(groups), ['IMG_0005', 'IMG_0007'])
+            self.assertEqual(fb.identical_copies(groups['IMG_0005']), {flight: True, panels: True})
+            self.assertEqual(fb.identical_copies(groups['IMG_0007']), {flight: False, panels: False})
+            choices = fb.valid_choices(groups, {'IMG_0005': str(panels), 'IMG_0007': folder, 'IMG_0010': str(flight)})
+            self.assertEqual(choices, {'IMG_0005': panels})
+        self.assertEqual(fb.distinct_paths([r'C:\data\01\survey\raw', r'C:\data\01\calibration\raw']),
+                         ['…\\survey\\raw', '…\\calibration\\raw'])
+        self.assertEqual(fb.distinct_paths([r'C:\data', r'C:\data\raw']), [r'C:\data', r'C:\data\raw'])  # one holds the other
+        self.assertEqual(fb.distinct_paths([r'C:\a', r'D:\a']), [r'C:\a', r'D:\a'])
+
+
 class WindowTests(unittest.TestCase):
 
     def setUp(self):
@@ -268,6 +299,65 @@ class WindowTests(unittest.TestCase):
             chosen = fb.ask_folder(self.root, 'Results folder', self.tree)
         constructor.assert_called_once_with(self.root, 'Results folder', self.tree)
         self.assertEqual(chosen, str(Path(str(self.tree / 'B_folder')).absolute()))
+
+    def test_a_list_of_folders_is_built_and_the_repeated_captures_are_chosen_before_it_is_used(self):
+        flight, panels = make_copies(self.tree / 'a_folder')
+        browser = fb.FoldersBrowser(self.root, 'Images folder', flight.parent, [flight], {}, None)
+        self.root.update()
+        self.assertEqual(browser.folders, [flight])
+        for name in ('flight', 'panels'):                                     # both selected: added once each
+            key = next(key for key, (path, _) in browser.entries.items() if path.name == name)
+            browser.tree.selection_add(key)
+        browser.add_folders()
+        self.assertEqual(browser.folders, [flight, panels])
+        self.assertEqual(browser.folder_list.heading('path')['text'], 'Folders to use (2)')
+        with mock.patch.object(fb, 'ask_repeated_captures', return_value=None) as ask:    # cancelled: not used yet
+            browser.accept()
+        self.assertEqual(list(ask.call_args[0][1]), ['IMG_0005', 'IMG_0007'])
+        self.assertTrue(browser.winfo_exists())
+        chosen = {'IMG_0005': str(panels), 'IMG_0007': str(flight)}
+        with mock.patch.object(fb, 'ask_repeated_captures', return_value=chosen):
+            browser.accept()
+        self.assertEqual(browser.result, ([str(flight), str(panels)], chosen))
+
+    def test_the_folders_are_used_without_asking_when_every_repeated_capture_has_its_copy(self):
+        flight, panels = make_copies(self.tree / 'a_folder')
+        chosen = {'IMG_0005': str(panels), 'IMG_0007': str(flight), 'IMG_0099': str(flight)}    # IMG_0099 is not repeated
+        browser = fb.FoldersBrowser(self.root, 'Images folder', flight, [flight, panels], chosen, None)
+        browser.folder_list.selection_set('1')
+        browser.remove_folders()
+        self.assertEqual(browser.folders, [flight])
+        with mock.patch.object(fb, 'ask_repeated_captures') as ask:
+            browser.accept()
+        ask.assert_not_called()
+        self.assertEqual(browser.result, ([str(flight)], {}))                 # nothing is repeated in one folder
+        browser = fb.FoldersBrowser(self.root, 'Images folder', flight, [flight, panels], chosen, None)
+        with mock.patch.object(fb, 'ask_repeated_captures') as ask:
+            browser.accept()
+        ask.assert_not_called()
+        self.assertEqual(browser.result[1], {'IMG_0005': str(panels), 'IMG_0007': str(flight)})
+
+    def test_the_dialog_of_the_repeated_captures_shows_the_copies_and_keeps_the_choices(self):
+        import radiometric_correction_tools as rct
+        flight, panels = make_copies(self.tree / 'a_folder')
+        dialog = fb.RepeatedCapturesDialog(self.root, rct.repeated_captures([flight, panels]))
+        self.root.update()
+        rows = [dialog.sources.item(item)['values'] for item in dialog.sources.get_children()]
+        self.assertEqual(rows, [['…\\flight', 2, 'Identical files'],
+                                ['…\\panels', 2, 'Identical files']])
+        self.assertEqual(dialog.copy_path.get(), f"Selected copy: {flight}")
+        self.pump(lambda: dialog.preview.path is not None and dialog.preview.path.name == 'IMG_0005_1.tif')
+        with mock.patch('tkinter.messagebox.showerror') as error:              # a capture without a choice
+            dialog.accept()
+        self.assertIn('IMG_0005', error.call_args[0][1])
+        dialog.sources.selection_set('1')
+        dialog.keep()                                                          # panels for IMG_0005; IMG_0007 is shown
+        self.assertEqual(dialog.current_name(), 'IMG_0007')
+        self.assertEqual(dialog.sources.item('0')['values'][2], 'Different files')
+        dialog.keep_remaining()                                                # the first copy (flight) for the rest
+        self.assertIn('2 of 2', dialog.status.get())
+        dialog.accept()
+        self.assertEqual(dialog.result, {'IMG_0005': str(panels), 'IMG_0007': str(flight)})
 
     def select_in(self, browser, name):
         key = next(key for key, (path, _) in browser.entries.items() if path.name == name)

@@ -2,7 +2,7 @@
 
 <div align="justify">
 
-&emsp;&emsp;This Python module provides a simplified alternative for converting raw images from MicaSense multispectral cameras into reflectance, or into radiance for a calibration made afterwards (for example with targets in the field), using the reference panel and, optionally, the Downwelling Light Sensor (DLS) data to correct changes in illumination. It was written for the RedEdge-P and tested only with it (see [What has been tested](#what-has-been-tested)). It can be used through a user interface (UI), opened with a launcher on Windows, from the command line (the workflow runner) or as a Python library.
+This Python module provides a simplified alternative for converting raw images from MicaSense multispectral cameras into reflectance, or into radiance for a calibration made afterwards (for example with targets in the field), using the reference panel and, optionally, the Downwelling Light Sensor (DLS) data to correct changes in illumination. It was written for the RedEdge-P and tested only with it (see [What has been tested](#what-has-been-tested)). It can be used through a user interface (UI), opened with a launcher on Windows, from the command line (the workflow runner) or as a Python library.
 
 **Contents**
 
@@ -19,6 +19,7 @@
   - [Other cameras and other numbers of bands](docs/other-cameras.md)
   - [Development notes](docs/development.md)
 - [Background and credits](#background-and-credits)
+- [License and citation](#license-and-citation)
 
 <p align="center">
   <img src="docs/workflow_tools.png" width="900"
@@ -27,16 +28,16 @@
 
 ## What has been tested
 
-&emsp;&emsp;The program is prepared for other MicaSense cameras (RedEdge-M/MX, Altum, Altum-PT, dual-camera systems): the bands, the file names and the bands that are left out are configurable, and the bands can be read from the images themselves (see [Other cameras](docs/other-cameras.md)). For now, however, it has been tested **only with images of the MicaSense RedEdge-P**. The presets of the other models come from the documentation of the manufacturer, not from images, and cameras of other makers (for example Sentera) have not been tried. Use "Detect from capture" and compare the result with your own data before relying on them.
+The program is prepared for other MicaSense cameras (RedEdge-M/MX, Altum, Altum-PT, dual-camera systems): the bands, the file names and the bands that are left out are configurable, and the bands can be read from the images themselves (see [Other cameras](docs/other-cameras.md)). For now, however, it has been tested **only with images of the MicaSense RedEdge-P**. The presets of the other models come from the documentation of the manufacturer, not from images, and cameras of other makers (for example Sentera) have not been tried. Use "Detect from capture" and compare the result with your own data before relying on them.
 
-&emsp;&emsp;The reflectance calibration of Agisoft Metashape 2.3.1 was compared with this program on a RedEdge-P flight: with one panel capture before and one after the flight, Metashape interpolates them in time, which is "Before and after, weighted by time" here; with several, it uses only the last capture before each image and the first after it, which is "Closest single capture before and after each image, by time". The panel factors of the two programs differ by 0.6 % (see [Metashape](docs/reference-panel.md#metashape)).
+The reflectance calibration of Agisoft Metashape 2.3.1 was compared with this program on a RedEdge-P flight: with one panel capture before and one after the flight, Metashape interpolates them in time, which is "Before and after, weighted by time" here; with several, it uses only the last capture before each image and the first after it, which is "Closest single capture before and after each image, by time". The panel factors of the two programs differ by 0.6 % (see [Metashape](docs/reference-panel.md#metashape)).
 
 ## Quick start
 
 1. **Install** Python 3.10 or newer (with Tkinter) and, in a dedicated environment, the packages of `requirements.txt` (or run `conda env create -f environment.yml`), plus ExifTool, a separate program that reads the metadata of the images. On Windows, the QR code reader (pyzbar) also needs the Microsoft Visual C++ 2013 Redistributable (x64). The details, and what to check on a new computer, are in [Installing and launching](docs/installation.md).
 2. **Open the UI**: double-click `open_radiometric_window.cmd` (Windows) or run `python -m radiometric_app window --root .` in the project folder. It asks which Python to use, checks the packages and ExifTool, and opens.
 3. **Correct the example images** in `images/raw`: `IMG_0005` and `IMG_0422` show the reference panel, before and after the flight, and `IMG_0010` is the capture to correct. `IMG_0003` and `IMG_0009` (before the flight) and `IMG_0423` (after it) are more photos of the panel, to try several panel captures (the example images are six captures of a longer flight; the complete flight is not included). Go through the pages of the UI, described in [The user interface](docs/user-interface.md):
-   - *Inputs*: the images folder, the results folder, the captures that show the panel (with "Check panel captures..." to see how they agree) and the captures to correct.
+   - *Inputs*: the images folder (or several), the results folder, the captures that show the panel (with "Check panel captures..." to see how they agree) and the captures to correct.
    - *Reference panel*: the reflectance of the panel (typed, or computed from its spectral response file; the one of the example panel is in `reference_panel_spectral_response`), then "Check / draw panel regions..." to accept the region of the panel in each band.
    - *DLS* (optional): corrects the changes in illumination between the panel capture and each image.
    - *Run and results*: "Check inputs", then "Run".
@@ -46,11 +47,11 @@
   <img src="docs/screenshots/window_inputs.png" width="800" alt="The Inputs page of the user interface">
 </p>
 
-&emsp;&emsp;The same steps run without the UI, with the [workflow runner](docs/python-and-command-line.md#workflow-runner-no-user-interface) (a command line that reads a JSON configuration) or with the [Python library](docs/python-and-command-line.md#example-raw-images-to-reflectance-with-the-python-library).
+The same steps run without the UI, with the [workflow runner](docs/python-and-command-line.md#workflow-runner-no-user-interface) (a command line that reads a JSON configuration) or with the [Python library](docs/python-and-command-line.md#example-raw-images-to-reflectance-with-the-python-library).
 
 ## Documentation
 
-&emsp;&emsp;The same pages are also published as a website, with a side bar and a search: [mhdf.github.io/micasense_radiometric_correction](https://mhdf.github.io/micasense_radiometric_correction/).
+The same pages are also published as a website, with a side bar and a search: [mhdf.github.io/micasense_radiometric_correction](https://mhdf.github.io/micasense_radiometric_correction/).
 
 | Page | What is in it |
 |---|---|
@@ -66,8 +67,12 @@
 
 ## Background and credits
 
-&emsp;&emsp;All functions are derived from the original [MicaSense image processing repository](https://github.com/micasense/imageprocessing) but have been streamlined to mitigate issues caused by Exif metadata inconsistencies. These issues were encountered while pre-processing images captured with the camera firmware v1.4.5 in preparation for geometric correction using photogrammetry software.
+All functions are derived from the original [MicaSense image processing repository](https://github.com/micasense/imageprocessing) but have been streamlined to mitigate issues caused by Exif metadata inconsistencies. These issues were encountered while pre-processing images captured with the camera firmware v1.4.5 in preparation for geometric correction using photogrammetry software.
 
-&emsp;&emsp;For more details about the steps required for pre-processing MicaSense multispectral images see the tutorials (e.g. ['Tutorial 1'](https://github.com/micasense/imageprocessing/blob/master/MicaSense%20Image%20Processing%20Tutorial%201.ipynb)) provided by MicaSense in their repository.
+For more details about the steps required for pre-processing MicaSense multispectral images see the tutorials (e.g. ['Tutorial 1'](https://github.com/micasense/imageprocessing/blob/master/MicaSense%20Image%20Processing%20Tutorial%201.ipynb)) provided by MicaSense in their repository.
+
+## License and citation
+
+The program is distributed under the [MIT License](LICENSE), which also keeps the copyright notice of the MicaSense code it is derived from. To cite it, use "Cite this repository" on the GitHub page of the repository, which gives the reference from [CITATION.cff](CITATION.cff), and give the version used (the provenance record of each corrected capture also keeps a fingerprint of the code that produced it).
 
 </div>

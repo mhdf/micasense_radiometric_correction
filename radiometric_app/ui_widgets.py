@@ -502,12 +502,16 @@ class HelpPanel:
         self.focus = self.explanation_of(widget)
         self._refresh()
 
-    def follow(self, toplevel):
-        """ Follow the pointer and the focus in a window (the events of the widgets inside it reach it) """
+    def follow(self, toplevel, area=None):
+        """
+        Follow the pointer and the focus in a window (the events of the widgets inside it reach it), over the widgets of
+        area (default: the widget that holds the column)
+        """
         self.root = toplevel
+        area = str(area if area is not None else self.widget.master)
 
         def inside(widget):
-            return widget is not None and str(widget).startswith(str(self.widget.master))
+            return widget is not None and str(widget).startswith(area)
 
         def on_motion(event):
             try:

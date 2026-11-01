@@ -805,29 +805,126 @@ def compile_file_pattern(pattern=None):
     return compiled
 
 
-def _capture_files(images_folder, pattern=None):
-    """ [(capture name, index or None, path)] of the files of the folder whose names match the pattern """
+FOLDER_SEPARATOR = ' | '                  # between the folders of a text that names several
+
+
+def folder_list(value):
+    """
+    The folders that a value names, as written, in its order and each once: a path, a list of paths, or a text with
+    several paths separated by ' | ' (or on several lines). An empty value gives []
+    """
+    if isinstance(value, (list, tuple)):
+        items = list(value)
+    elif isinstance(value, Path):
+        items = [value]
+    else:
+        items = str(value or '').replace(FOLDER_SEPARATOR.strip(), '\n').splitlines()
+    folders, seen = [], set()
+    for item in items:
+        text = str(item).strip().strip('"')
+        if text and _folder_identity(text) not in seen:
+            folders.append(text)
+            seen.add(_folder_identity(text))
+    return folders
+
+
+def _folder_identity(folder):
+    return os.path.normcase(os.path.abspath(str(folder)))
+
+
+class ImageFolders:
+    """
+    The raw images of one or several folders, read as if they were one. A capture whose name is in more than one of the
+    folders (for example a panel capture copied to the folders of two flights) is a repeated capture: the files of the
+    copy in chosen[name] are used and those of the other copies are left out; without a choice it cannot be read
+    (find_capture_paths says so). No file is changed
+        folders   a path, a list of paths or a text with the paths separated by ' | '
+        chosen    {capture name: folder of the copy to use}; a choice for a capture that is not repeated is not used
+    """
+
+    def __init__(self, folders, chosen=None):
+        self.folders = [Path(folder) for folder in folder_list(folders)]
+        self.chosen = {name: _folder_identity(folder) for name, folder in (chosen or {}).items()}
+
+    def __str__(self):
+        return FOLDER_SEPARATOR.join(str(folder) for folder in self.folders)
+
+    def files(self):
+        """ [(folder, path)] of the files of the folders, in the order of the folders (the subfolders are not read) """
+        return [(folder, path) for folder in self.folders for path in sorted(folder.iterdir()) if path.is_file()]
+
+
+def _image_folders(images_folder):
+    return images_folder if isinstance(images_folder, ImageFolders) else ImageFolders(images_folder)
+
+
+def _matching_files(images_folder, pattern=None):
+    """ [(capture name, index or None, folder, path)] of the files whose names match the pattern, all copies included """
     compiled = compile_file_pattern(pattern)
     found = []
-    for path in Path(images_folder).iterdir():
-        match = compiled.match(path.name) if path.is_file() else None
+    for folder, path in _image_folders(images_folder).files():
+        match = compiled.match(path.name)
         if match:
             index = match.groupdict().get('index')
-            found.append((match.group('capture'), int(index) if index and index.isdigit() else None, path))
+            found.append((match.group('capture'), int(index) if index and index.isdigit() else None, folder, path))
     return found
 
 
+def repeated_captures(images_folder, pattern=None):
+    """
+    The captures that are in more than one of the folders: {capture name: {folder: [paths of its files]}}, in the order
+    of the names and of the folders. The choices are not applied, so a capture stays here after its copy was chosen
+    """
+    copies = {}
+    for name, _, folder, path in _matching_files(images_folder, pattern):
+        copies.setdefault(name, {}).setdefault(folder, []).append(path)
+    return {name: copies[name] for name in sorted(copies) if len(copies[name]) > 1}
+
+
+def unresolved_captures(images_folder, pattern=None, names=None):
+    """ The repeated captures (of names, if given) without a valid choice of the copy to use """
+    source = _image_folders(images_folder)
+    return [name for name, copies in repeated_captures(source, pattern).items()
+            if (names is None or name in names) and
+            source.chosen.get(name) not in {_folder_identity(folder) for folder in copies}]
+
+
+def _capture_files(images_folder, pattern=None):
+    """
+    [(capture name, index or None, path)] of the files whose names match the pattern; of a repeated capture, only the copy
+    that was chosen (all of them while there is no choice)
+    """
+    source = _image_folders(images_folder)
+    found = _matching_files(source, pattern)
+    folders = {}
+    for name, _, folder, _ in found:
+        folders.setdefault(name, set()).add(_folder_identity(folder))
+    return [(name, index, path) for name, index, folder, path in found
+            if len(folders[name]) == 1 or source.chosen.get(name) not in folders[name]
+            or source.chosen[name] == _folder_identity(folder)]
+
+
 def list_capture_names(images_folder, pattern=None):
-    """ Return the sorted names of the captures in a folder, e.g. IMG_0005_1.tif ... IMG_0005_6.tif -> 'IMG_0005' """
+    """
+    Return the sorted names of the captures in a folder, e.g. IMG_0005_1.tif ... IMG_0005_6.tif -> 'IMG_0005'.
+    images_folder: a folder, several (see folder_list) or ImageFolders; a repeated capture is listed once
+    """
     return sorted({name for name, _, _ in _capture_files(images_folder, pattern)})
 
 
 def find_capture_paths(images_folder, capture_name, pattern=None):
-    """ Return the image paths of a capture, in the order of their numbers: IMG_0005_1.tif, IMG_0005_2.tif, ... """
+    """
+    Return the image paths of a capture, in the order of their numbers: IMG_0005_1.tif, IMG_0005_2.tif, ...
+    ValueError if the capture is in more than one of the folders and the copy to use was not chosen
+    """
     files = [(index, path) for name, index, path in _capture_files(images_folder, pattern) if name == capture_name]
     if not files:
         raise FileNotFoundError(f"No images of the capture '{capture_name}' matching the file name pattern "
                                 f"{pattern or CAPTURE_FILE_PATTERN} in {images_folder}")
+    folders = list(dict.fromkeys(str(path.parent) for _, path in files))
+    if len(folders) > 1:
+        raise ValueError(f"The capture '{capture_name}' is in more than one images folder ({', '.join(folders)}): choose "
+                         "the copy to use (in the window: Browse... of the images folder, Review repeated captures)")
     files.sort(key=lambda item: (item[0] is None, item[0] or 0, item[1].name))
     return [str(path) for _, path in files]
 
@@ -846,27 +943,30 @@ def pattern_template(pattern):
 
 def preview_file_pattern(images_folder, pattern=None, examples=3):
     """
-    How a file name pattern reads the files of a folder
+    How a file name pattern reads the files of a folder (or of several: each copy of a repeated capture counts once in
+    files_per_capture)
     Outputs: {'files' (all the files), 'matched', 'captures', 'files_per_capture' ({number of files: number of captures}),
              'examples' ([(file name, capture, index or None)], the first of each of the first captures), 'unmatched'
              (names of a few files that do not match)}. ValueError if the pattern is not valid
     """
     compiled = compile_file_pattern(pattern)
-    names = sorted(path.name for path in Path(images_folder).iterdir() if path.is_file())
+    files = sorted(_image_folders(images_folder).files(), key=lambda item: item[1].name)
     found = {}
     unmatched = []
-    for name in names:
-        match = compiled.match(name)
+    for folder, path in files:
+        match = compiled.match(path.name)
         if match:
             index = match.groupdict().get('index')
-            found.setdefault(match.group('capture'), []).append((name, int(index) if index and index.isdigit() else None))
+            found.setdefault((match.group('capture'), str(folder)), []).append(
+                (path.name, int(index) if index and index.isdigit() else None))
         else:
-            unmatched.append(name)
+            unmatched.append(path.name)
     per_capture = {}
-    for files in found.values():
-        per_capture[len(files)] = per_capture.get(len(files), 0) + 1
-    shown = [(files[0][0], capture, files[0][1]) for capture, files in sorted(found.items())[:examples]]
-    return {'files': len(names), 'matched': sum(len(files) for files in found.values()), 'captures': len(found),
+    for copy in found.values():
+        per_capture[len(copy)] = per_capture.get(len(copy), 0) + 1
+    shown = [(copy[0][0], capture, copy[0][1]) for (capture, _), copy in sorted(found.items())[:examples]]
+    return {'files': len(files), 'matched': sum(len(copy) for copy in found.values()),
+            'captures': len({capture for capture, _ in found}),
             'files_per_capture': dict(sorted(per_capture.items())), 'examples': shown, 'unmatched': unmatched[:3]}
 
 

@@ -4,11 +4,11 @@
 
 <div align="justify">
 
-&emsp;&emsp;The processing needs the images, the reference panel and the metadata of the images, which is read with [ExifTool](https://exiftool.org/), so the field labels written by the camera must be kept.
+The processing needs the images, the reference panel and the metadata of the images, which is read with [ExifTool](https://exiftool.org/), so the field labels written by the camera must be kept.
 
 ## Example: raw images to reflectance with the Python library
 
-&emsp;&emsp;The example below processes the example images in this repository (`images/raw`): the capture `IMG_0005` shows the reference panel and `IMG_0010` is the capture to be corrected. First, import the required libraries and the module.
+The example below processes the example images in this repository (`images/raw`): the capture `IMG_0005` shows the reference panel and `IMG_0010` is the capture to be corrected. First, import the required libraries and the module.
 
 ```
 # Standard library imports
@@ -30,7 +30,7 @@ import radiometric_correction_tools as rct
 exiftool_path = os.environ.get('exiftoolpath')
 ```
 
-&emsp;&emsp;Next, provide the information required for processing: (i) the names of the captures with the reference panel and with the images to be transformed from raw Digital Numbers (DNs) to reflectance, (ii) the reflectance levels of the different bands in the reference panel, a value provided by MicaSense with each reference panel, and (iii) whether the DLS should be used. The files of each capture are matched to the bands using the band name written in their metadata (`XMP:BandName`), not the order of the files: in the example images the file `_3` is the Red band and `_6` is the Panchro band. Each result keeps the name of its source file, so `IMG_0010_3.tif` is the Red band both before and after the correction.
+Next, provide the information required for processing: (i) the names of the captures with the reference panel and with the images to be transformed from raw Digital Numbers (DNs) to reflectance, (ii) the reflectance levels of the different bands in the reference panel, a value provided by MicaSense with each reference panel, and (iii) whether the DLS should be used. The files of each capture are matched to the bands using the band name written in their metadata (`XMP:BandName`), not the order of the files: in the example images the file `_3` is the Red band and `_6` is the Panchro band. Each result keeps the name of its source file, so `IMG_0010_3.tif` is the Red band both before and after the correction.
 
 ```
 # Name of the captures: the reference panel and the images to be corrected
@@ -56,7 +56,7 @@ image_files = rct.read_band_files( rct.find_capture_paths(root_path / images_fol
                                    expected_bands=bands, exiftool_path=exiftool_path )
 ```
 
-&emsp;&emsp;Finally, iterate over the bands, saving the images after transforming them from DNs to radiance and then to reflectance.
+Finally, iterate over the bands, saving the images after transforming them from DNs to radiance and then to reflectance.
 
 ```
 # Images of both captures (the panel is detected inside the loop)
@@ -105,7 +105,7 @@ rct.write_provenance( root_path / results_folder / (image_to_process_name + '_pr
                       checks=checks )
 ```
 
-&emsp;&emsp;In summary, `rct.Image(image, metadata)` creates an object with the image and its information; `detect_reference_panel(...)` finds the reference panel on the undistorted radiance image and calculates the factor that converts radiance to reflectance; `rct.combine_panels(...)` gives the factor applied to the image (with the DLS, the panel factor times the DLS ratio; with two panels, their weighted mean); and `digital_numbers_to_reflectance(factor)` transforms the target image to radiance and multiplies it by that factor. `rct.find_capture_paths()` and `rct.read_band_files()` list the files of a capture and match them to the bands.
+In summary, `rct.Image(image, metadata)` creates an object with the image and its information; `detect_reference_panel(...)` finds the reference panel on the undistorted radiance image and calculates the factor that converts radiance to reflectance; `rct.combine_panels(...)` gives the factor applied to the image (with the DLS, the panel factor times the DLS ratio; with two panels, their weighted mean); and `digital_numbers_to_reflectance(factor)` transforms the target image to radiance and multiplies it by that factor. `rct.find_capture_paths()` and `rct.read_band_files()` list the files of a capture and match them to the bands.
 
 ## Checks and calibration record
 
@@ -115,7 +115,7 @@ rct.write_provenance( root_path / results_folder / (image_to_process_name + '_pr
 
 ## Workflow runner (no user interface)
 
-&emsp;&emsp;`radiometric_app/radiometric_workflow.py` runs the whole example above, for all the captures of a folder, from a configuration with fixed keys. It has no user interface (the UI is built on top of it, from `FIELDS`, which describes each key: default, kind of value, label and description).
+`radiometric_app/radiometric_workflow.py` runs the whole example above, for all the captures of a folder, from a configuration with fixed keys. It has no user interface (the UI is built on top of it, from `FIELDS`, which describes each key: default, kind of value, label and description).
 
 ```
 python -m radiometric_app.radiometric_workflow --write-default-config config/radiometric_inputs.json   # write the defaults, then edit them
@@ -124,6 +124,7 @@ python -m radiometric_app.radiometric_workflow --request-json request.json      
 ```
 
 - The configuration is a flat json file with the keys of `FIELDS` (`INPUTS.*` folders, captures and what is written, `PANEL.*` reflectance levels and panel measurement, `CORRECTION.use_dls`, `CHECKS.*` limits). Only the keys to change are needed; unknown keys are an error. Relative paths are resolved from `--root` (default: the current folder). Labels and descriptions may change in future versions, the keys will not.
+- `INPUTS.images_folder` is one folder or a list of folders, whose captures are read together. A capture found in more than one of them is used only with a choice of the copy, in `INPUTS.repeated_capture_folders` (`{"IMG_0005": "<folder of the copy to use>"}`); without it the configuration is not valid. In Python, `rct.ImageFolders(folders, chosen)` can be given wherever a folder is (`rct.list_capture_names`, `rct.find_capture_paths`), and `rct.repeated_captures(folders)` lists the copies.
 - With `INPUTS.image_captures` empty, every capture in the images folder except the panel capture(s) and those of `INPUTS.excluded_captures` is corrected. The panel is detected once and used for all of them. The panel captures are before or after the flight by their time; the panel after the flight is compared with the one before and, depending on `PANEL.panels_used`, can also calibrate the images (see [two panel captures](reference-panel.md#two-panel-captures-before-and-after-the-flight)). `radiometric_workflow.check_panel_captures(config, root)` measures and checks the panel captures without correcting anything.
 - The stages are `LOAD_CAPTURES`, `PANEL_CALIBRATION`, `REFLECTANCE`, `DLS_CHECKS` and `PROVENANCE`. A capture that fails (for example a missing band file, or a missing DLS irradiance when `CORRECTION.use_dls` is on) is reported and the others continue.
 - Each corrected capture gets its `<capture>_provenance.json`. The whole run gets `radiometric_result.json` in the results folder, which says what happened and where to look: the status (`completed`, `completed_with_errors` or `failed`), the errors, the flags of all the checks (see [the flags of a run](dls-correction.md#the-flags-of-a-run-are-counted-by-criterion); `flag_groups` has the structured form), the complete configuration, the panel calibration, the spikes and steps of the irradiance and, for each capture, its output files, the panels used, its errors and a summary of its DLS checks. `outputs` has the complete path of every output file. The command prints `RADIOMETRIC_RESULT_JSON=<path>` and returns 0 only for `completed` (1 for errors, 2 for an unreadable request or configuration file).
