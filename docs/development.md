@@ -16,7 +16,7 @@ _config.yml                       the website of the documentation (GitHub Pages
 launchers/                        launchers for Windows (double-click), the choice of the Python and the check of the computer
 config/                           your configuration, profiles, presets and chosen Python (not kept in git)
 requirements.txt, environment.yml the Python packages (pip) and the conda environment (see docs/installation.md)
-open_radiometric_window.cmd       double-click to open the UI (the other launchers are in launchers/)
+open_radiometric_ui.cmd           double-click to open the UI (the other launchers are in launchers/)
 images/raw/                       the example images: IMG_0003, IMG_0005 and IMG_0009 show the reference panel before the flight, IMG_0422 and IMG_0423 after it, IMG_0010 is the capture to correct
 reference_panel_spectral_response/ the spectral response (reflectance by wavelength) of the panel of the example
 results/                          what the program writes (not kept in git)

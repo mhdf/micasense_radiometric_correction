@@ -258,16 +258,16 @@ class PythonEnvironmentFileTests(unittest.TestCase):
         launchers = Path(__file__).resolve().parent.parent / 'launchers'
         self.assertIn('config\\python_environment.json', (launchers / 'select_python.ps1').read_text(encoding='utf-8'))
         self.assertIn('select_python.ps1', (launchers / '_python.cmd').read_text(encoding='utf-8'))
-        for name in ('open_radiometric_window_debug.cmd', 'open_panel_selector.cmd', 'check_environment.cmd'):
+        for name in ('open_radiometric_ui_debug.cmd', 'open_panel_selector.cmd', 'check_environment.cmd'):
             text = (launchers / name).read_bytes()
             self.assertIn(b'_python.cmd', text, name)
             self.assertIn(b'\r\n', text, name)                                 # cmd files keep their Windows line endings
-        main = (launchers.parent / 'open_radiometric_window.cmd').read_bytes()           # the main one is in the project folder
+        main = (launchers.parent / 'open_radiometric_ui.cmd').read_bytes()           # the main one is in the project folder
         self.assertIn(b'launchers\\_python.cmd', main)
         self.assertIn(b'cd /d "%~dp0"', main)
         self.assertNotIn(b'%~dp0..', main)
         self.assertIn(b'\r\n', main)
-        self.assertFalse((launchers / 'open_radiometric_window.cmd').exists())
+        self.assertFalse((launchers / 'open_radiometric_ui.cmd').exists())
 
 
 class AnotherPythonTests(unittest.TestCase):

@@ -1,0 +1,2 @@
+# Windows launchers need Windows line endings, whatever the Git settings of the computer
+*.cmd text eol=crlf

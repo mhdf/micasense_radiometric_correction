@@ -43,10 +43,10 @@ The check (`radiometric_app/environment.py`, which uses only standard Python lib
 
 ## Launchers (Windows)
 
-Double-click `open_radiometric_window.cmd`, in the project folder, to open the UI; the other files are in the `launchers` folder. They use the Python chosen as described in [Choosing the Python](#choosing-the-python) and the project folder as `--root`, so the relative paths of the configuration (for example `images/raw`) are resolved from there.
+Double-click `open_radiometric_ui.cmd`, in the project folder, to open the UI; the other files are in the `launchers` folder. They use the Python chosen as described in [Choosing the Python](#choosing-the-python) and the project folder as `--root`, so the relative paths of the configuration (for example `images/raw`) are resolved from there.
 
-- `open_radiometric_window.cmd`: the UI, without a console.
-- `launchers/open_radiometric_window_debug.cmd`: the same UI with the console kept open, to see messages and error traces.
+- `open_radiometric_ui.cmd`: the UI, without a console.
+- `launchers/open_radiometric_ui_debug.cmd`: the same UI with the console kept open, to see messages and error traces.
 - `launchers/open_panel_selector.cmd`: only the tool to draw the panel regions, using `config/radiometric_inputs.json` if it exists, otherwise the defaults. Extra arguments are passed on (for example `--capture IMG_0005`).
 - `launchers/select_python.cmd`: choose the `python.exe` and check it.
 - `launchers/check_environment.cmd`: list the Python, Tkinter, the packages with their versions and ExifTool, and what to install.
