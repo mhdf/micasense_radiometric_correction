@@ -42,4 +42,6 @@ python -m unittest discover -s tests -t . -v
 
 The tests use the example images and need ExifTool (set the environment variable `exiftoolpath` if it is not in the PATH). The tests of the UI need a display and are skipped without one. `tests/test_readme.py` checks the documentation: the contents list of the README has every section in order, every link of the README and of the pages of `docs` reaches an existing file and heading, and the images exist.
 
+GitHub runs the same tests for every push to `main` and every pull request (`.github/workflows/tests.yml`), on Windows with Python 3.10 and 3.12, after installing ExifTool, the Visual C++ 2013 runtime and the packages of `requirements.txt`. The result is shown in the Actions tab of the repository and on each pull request.
+
 </div>
