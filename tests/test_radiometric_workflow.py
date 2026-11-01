@@ -1116,6 +1116,10 @@ class RunTests(unittest.TestCase):
                              [('IMG_0003', 'before'), ('IMG_0005', 'before'), ('IMG_0009', 'before'),
                               ('IMG_0422', 'after'), ('IMG_0423', 'after')])
             self.assertEqual([row['capture'] for row in rows if row['flag']], flagged, use_dls)
+            self.assertIsNotNone(rows[3]['spread'])                              # the two after the flight: a pair
+            self.assertFalse(any(row['alone'] for row in rows))
+            for row in rows:                                                     # the same flag from the row alone
+                self.assertEqual(wf.panel_capture_flag(row, 0.02), row['flag'])
 
     def test_the_panel_captures_can_be_checked_without_a_run(self):
         rows, flags = wf.check_panel_captures(config_for(self.folder / 'check', **{
@@ -1123,6 +1127,7 @@ class RunTests(unittest.TestCase):
         self.assertEqual([(row['capture'], row['moment']) for row in rows], [('IMG_0005', 'before'), ('IMG_0422', 'after')])
         self.assertEqual(rows[0]['orientation'], 'with the sun at the side')
         self.assertTrue(all(row['used'] for row in rows))
+        self.assertTrue(all(row['alone'] for row in rows))                       # one capture in each moment
         self.assertFalse((self.folder / 'check').exists())                       # nothing is written
 
     def test_a_panel_capture_that_departs_from_its_moment_is_named(self):

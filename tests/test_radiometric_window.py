@@ -1276,10 +1276,11 @@ class WindowTests(unittest.TestCase):
 
     def test_the_panel_captures_are_checked_in_a_table_and_can_be_left_out(self):
         rows = [{'capture': 'IMG_0005', 'time': '2023:02:02 13:26:38', 'moment': 'before', 'heading': 87.0,
-                 'orientation': 'with the sun at the side', 'used': True, 'departure': -0.05, 'band': 'Red',
-                 'flag': 'departs more than 2 % from the others'},
+                 'orientation': 'with the sun at the side', 'used': True, 'departure': -0.05, 'spread': None,
+                 'band': 'Red', 'alone': False, 'flag': 'departs more than 2 % from the others'},
                 {'capture': 'IMG_0422', 'time': '2023:02:02 13:48:36', 'moment': 'after', 'heading': 83.0,
-                 'orientation': 'with the sun at the side', 'used': True, 'departure': None, 'band': None, 'flag': ''}]
+                 'orientation': 'with the sun at the side', 'used': True, 'departure': None, 'spread': None, 'band': None,
+                 'alone': True, 'flag': ''}]
         self.frame.set_value('INPUTS.reference_panel_capture', 'IMG_0005, IMG_0422')
         self.frame._show_panel_check(rows, [])
         window = self.frame.panel_check_window
@@ -1287,6 +1288,17 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(tree.get_children(), ('IMG_0005', 'IMG_0422'))
         self.assertEqual(tree.item('IMG_0005')['values'][4], '-5.0 % (Red)')
         self.assertEqual(tree.item('IMG_0005')['tags'], ['flagged'])
+        texts = [child.cget('text') for child in window.winfo_children()[0].winfo_children()
+                 if child.winfo_class() == 'TLabel']
+        self.assertTrue(any('IMG_0422 is the only panel capture after the flight' in text for text in texts), texts)
+        self.frame.panel_check_limit.set('10')                                  # the limit is changed in the table
+        self.assertEqual(tree.item('IMG_0005')['tags'], '')
+        self.assertEqual(tree.set('IMG_0005', 'flag'), '')
+        self.assertEqual(self.frame.model.config()[0]['CHECKS.panel_capture_spread_tolerance'], 0.1)   # and in the run
+        self.frame.panel_check_limit.set('1')
+        self.assertEqual(tree.set('IMG_0005', 'flag'), 'departs more than 1 % from the others')
+        self.frame.panel_check_limit.set('x')                                   # what is not a number changes nothing
+        self.assertEqual(self.frame.model.config()[0]['CHECKS.panel_capture_spread_tolerance'], 0.01)
         self.frame.leave_out_panel_captures(['IMG_0005'])
         config = self.frame.model.config()[0]
         self.assertEqual(config['INPUTS.reference_panel_capture'], 'IMG_0422')

@@ -165,7 +165,11 @@ DLS_LIMIT_KEYS = ('CHECKS.band_ratio_tolerance', 'CHECKS.ratio_range_min', 'CHEC
 PANEL_CHECK_NOTE = ("Measures all the panel captures listed, without correcting anything, and shows them in a table: the "
                     "moment of each one (before or after the flight, from its time), its heading against the sun, and how "
                     "far it is from the other captures of its moment (the largest band). A capture that departs more than "
-                    "the spread limit (DLS page) is flagged.\n"
+                    "the spread limit is flagged; the limit can be changed in the table (it is the 'Spread of the panel "
+                    "captures of one moment' of the DLS page, also used by the run).\n"
+                    "This limit is for captures of the same moment, a few seconds apart, so it is small (2 %). 'Light of "
+                    "the panel: largest difference' (15 %) is another check: it compares the light of each image with "
+                    "that of the nearest panel capture.\n"
                     "Leave out the selected removes them from the panel captures and adds them to the captures to leave "
                     "out.")
 
@@ -1297,9 +1301,15 @@ class RadiometricFrame:
         window.configure(background=COLORS['background'])
         frame = ttk.Frame(window, padding=12)
         frame.pack(fill='both', expand=True)
-        limit = 100 * self.model.config()[0]['CHECKS.panel_capture_spread_tolerance']
-        ttk.Label(frame, text=f"Each capture against the median of the others of its moment, on what is averaged (largest "
-                              f"band). Flagged above {limit:g} %.", style='Muted.TLabel').pack(anchor='w', pady=(0, 6))
+        ttk.Label(frame, text="Each capture against the others of its moment (before or after the flight), on what is "
+                              "averaged, in the band where they differ most.", style='Muted.TLabel').pack(anchor='w')
+        limit_line = ttk.Frame(frame)
+        limit_line.pack(anchor='w', pady=(6, 8))
+        ttk.Label(limit_line, text='Flag a capture that differs from the others of its moment by more than').pack(
+            side='left')
+        limit_text = tk.StringVar(window, f"{100 * self.model.config()[0]['CHECKS.panel_capture_spread_tolerance']:g}")
+        ttk.Entry(limit_line, textvariable=limit_text, width=6).pack(side='left', padx=6)
+        ttk.Label(limit_line, text='%  (also the limit of the run; DLS page)', style='Muted.TLabel').pack(side='left')
         columns = ('time', 'moment', 'heading', 'orientation', 'departure', 'flag')
         tree = ttk.Treeview(frame, columns=columns, selectmode='extended', height=min(max(len(rows), 4), 16))
         for column, title, width in (('#0', 'Capture', 110), ('time', 'Time', 80), ('moment', 'Moment', 70),
@@ -1309,14 +1319,34 @@ class RadiometricFrame:
             tree.column(column, width=width, anchor='w', stretch=column == 'flag')
         tree.tag_configure('flagged', foreground=COLORS['automatic'])                 # the colour of the flags of the log
         for row in rows:
-            departure = '' if row['departure'] is None else f"{100 * row['departure']:+.1f} % ({row['band']})"
+            departure = ('' if row['band'] is None else f"{100 * row['departure']:+.1f} % ({row['band']})"
+                         if row['departure'] is not None else f"pair: {100 * row['spread']:.1f} % ({row['band']})")
             heading = '' if row['heading'] is None else f"{row['heading']:.0f} deg"
             tree.insert('', 'end', iid=row['capture'], text=row['capture'], tags=('flagged',) if row['flag'] else (),
                         values=(str(row['time'])[11:], row['moment'], heading, row['orientation'], departure, row['flag']))
         tree.pack(fill='both', expand=True)
+
+        def reflag(*_):
+            """ The flags under the limit typed (the captures are not read again); it becomes the limit of the run """
+            try:
+                limit = float(limit_text.get()) / 100
+            except ValueError:
+                return
+            if limit <= 0:
+                return
+            for row in rows:
+                if tree.exists(row['capture']):
+                    flag = wf.panel_capture_flag(row, limit)
+                    tree.set(row['capture'], 'flag', flag)
+                    tree.item(row['capture'], tags=('flagged',) if flag else ())
+            self.set_value('CHECKS.panel_capture_spread_tolerance', f"{limit:g}")
+        limit_text.trace_add('write', reflag)
+        self.panel_check_limit = limit_text
+        alone = [f"{row['capture']} is the only panel capture {row['moment']} the flight: there is no other capture of "
+                 "that moment to compare it with." for row in rows if row['alone']]
         other = [flag for flag in flags if not flag.startswith('Panel capture ')]
-        if other:
-            ttk.Label(frame, text='\n'.join(other), style='Muted.TLabel', wraplength=900, justify='left').pack(
+        if alone or other:
+            ttk.Label(frame, text='\n'.join(alone + other), style='Muted.TLabel', wraplength=900, justify='left').pack(
                 anchor='w', pady=(6, 0))
         line = ttk.Frame(frame)
         line.pack(fill='x', pady=(8, 0))

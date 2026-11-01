@@ -459,7 +459,10 @@ FIELDS = [
                   "Largest difference accepted (0.15 = about 15 %) between the DLS irradiance of an image and that of the "
                   "panel that is the most like it. A capture beyond it is flagged: no panel was photographed in light "
                   "like its own, and another panel capture under that light would help. A flag does not change the "
-                  "result.")},
+                  "result.\n"
+                  "It is not the limit for the panel captures of one moment (before or after the flight), which are "
+                  "compared with each other under 'Spread of the panel captures of one moment' (2 %), also shown in "
+                  "Check panel captures.")},
     {'key': 'CHECKS.max_camera_tilt_deg', 'group': 'Acquisition geometry (limits)', 'kind': 'float', 'default': rct.GEOMETRY_CHECKS['max_camera_tilt_deg'],
      'label': 'Largest camera tilt (deg)',
      'help': ("Largest angle accepted between the optical axis of the camera and the vertical, in degrees, in the "
@@ -1333,7 +1336,9 @@ def check_panel_captures(config, root='.', progress=None):
     """
     Measure and check the panel captures without correcting anything, for the table of the UI (progress: as in run)
     Outputs: (rows, the flags): one row per panel capture {'capture', 'time', 'moment', 'heading', 'orientation', 'used',
-             'departure' (the largest of its moment, or None), 'band', 'flag' (text, '' when nothing is wrong)}
+             'departure' (its largest from the median of its moment, with three or more captures, or None), 'spread' (the
+             largest spread of the two captures of its moment, or None), 'band', 'alone' (the only capture of its
+             moment), 'flag' (text, '' when nothing is wrong; see panel_capture_flag)}
     """
     config = merge_config(config)
     levels, _ = panel_reflectance_levels(config, root)
@@ -1349,22 +1354,32 @@ def check_panel_captures(config, root='.', progress=None):
     for moment in ('before', 'after'):
         record = result['panel'].get(moment, {})
         for name, item in record.get('captures', {}).items():
-            departure, band, flag = None, None, ''
-            item = dict(item, moment=moment)
+            departure, spread, band = None, None, None
             if name in record.get('departures', {}):
                 band, departure = max(record['departures'][name].items(), key=lambda pair: abs(pair[1]))
-                if abs(departure) > limit:
-                    flag = f"departs more than {100 * limit:g} % from the others"
             elif record.get('spread') and len(record['captures']) == 2:
                 band, spread = max(record['spread'].items(), key=lambda pair: pair[1])
-                if spread > limit:
-                    flag = f"the two captures of this moment disagree {100 * spread:.1f} %"
-            if not item['used']:
-                flag = 'not used: another orientation was chosen'
-            rows.append({'capture': name, 'time': item['time'], 'moment': moment, 'heading': item['heading'],
-                         'orientation': ORIENTATION_TEXT[item['orientation']], 'used': item['used'],
-                         'departure': departure, 'band': band, 'flag': flag})
+            row = {'capture': name, 'time': item['time'], 'moment': moment, 'heading': item['heading'],
+                   'orientation': ORIENTATION_TEXT[item['orientation']], 'used': item['used'], 'departure': departure,
+                   'spread': spread, 'band': band, 'alone': len(record['captures']) == 1}
+            row['flag'] = panel_capture_flag(row, limit)
+            rows.append(row)
     return rows, result['flags']
+
+
+def panel_capture_flag(row, limit):
+    """
+    The flag of a row of check_panel_captures under a spread limit (CHECKS.panel_capture_spread_tolerance), '' when nothing
+    is wrong: a capture of three or more that departs from the median of its moment, the two captures of a moment that
+    disagree, or a capture of an orientation that is not used
+    """
+    if not row['used']:
+        return 'not used: another orientation was chosen'
+    if row['departure'] is not None and abs(row['departure']) > limit:
+        return f"departs more than {100 * limit:g} % from the others"
+    if row['spread'] is not None and row['spread'] > limit:
+        return f"the two captures of this moment disagree {100 * row['spread']:.1f} %"
+    return ''
 
 
 def adjacent_panel_shares(panels, image, name):
