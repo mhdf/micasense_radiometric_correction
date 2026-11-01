@@ -16,6 +16,7 @@ from unittest import mock
 from radiometric_app import panel_spectrum as ps
 from radiometric_app import radiometric_window as rw
 from radiometric_app import radiometric_workflow as wf
+from tests import require_window_size
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -999,6 +1000,7 @@ class WindowTests(unittest.TestCase):
     def test_a_long_page_scrolls_and_a_short_one_does_not(self):
         self.root.attributes('-alpha', 0.0)
         self.root.deiconify()
+        require_window_size(self, self.root, 1000, 1900)
         self.root.geometry('1000x420')
         self.frame.show_page('PANEL')
         self.root.update()
@@ -1057,6 +1059,7 @@ class WindowTests(unittest.TestCase):
     def test_the_messages_follow_the_width_of_the_page_and_the_help_column_keeps_its_width(self):
         self.root.attributes('-alpha', 0.0)
         self.root.deiconify()
+        require_window_size(self, self.root, 1800, 760)
         self.root.geometry('1300x760')
         self.root.update()
         self.assertGreater(len(self.frame.wrapped_labels), 3)
@@ -1599,6 +1602,7 @@ class HelpColumnTests(unittest.TestCase):
     def test_the_column_can_be_resized_and_keeps_the_text_inside(self):
         self.root.attributes('-alpha', 0.0)
         self.root.deiconify()
+        require_window_size(self, self.root, 1700, 800)
         self.root.geometry('1400x800')
         self.root.update()
         panes = self.frame.panes
